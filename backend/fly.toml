@@ -1,0 +1,25 @@
+# Fly.io config for the backend. `fly launch --copy-config` then `fly secrets set GEMINI_API_KEY=...`.
+# WebSockets need a long-lived process, so keep at least one machine running.
+app = "codeverse-backend"
+primary_region = "atl"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "5100"
+  VOICE_BACKEND = "gemini_live"
+  LOG_LEVEL = "INFO"
+  # Set to your frontend origin(s), JSON list.
+  CORS_ORIGINS = '["https://codeverse.vercel.app"]'
+
+[http_service]
+  internal_port = 5100
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
