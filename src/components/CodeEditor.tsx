@@ -1,8 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import { IconAlertCircle } from '@tabler/icons-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -17,9 +16,8 @@ import {
   useMantineColorScheme,
 } from '@mantine/core';
 import logo from '../components/icon.png';
-import { problemDescriptions, ProblemKey } from './Problems'
-
-const socket = io('http://localhost:5100'); // Connect to Flask WebSocket server
+import { socket } from '../lib/socket';
+import { problemDescriptions, ProblemKey } from './Problems';
 
 const languageOptions = [
   { value: 'python', label: 'Python' },
@@ -33,10 +31,9 @@ const CodeEditor = () => {
   const [language, setLanguage] = useState('python');
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const monacoTheme = colorScheme === 'dark' ? 'vs-dark' : 'vs';
-  const [code, setCode] = useState<string>('');
-  const [problemText, setProblemText] = useState(''); // New state to store the problem text
-  const [problemName, setProblemName] = useState(''); // New state to store the problem text
   const [interviewActive, setInterviewActive] = useState(true);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   type MessageStatus = {
     message: string;
@@ -50,74 +47,41 @@ const CodeEditor = () => {
   };
   const [status, setStatus] = useState('Status 0');
 
-  // type ProblemKey =
-  //   | 'Two Sum'
-  //   | 'Reverse Linked List'
-  //   | 'Merge Sorted Arrays'
-  //   | 'Longest Substring Without Repeating Characters'
-  //   | 'Palindrome Check'
-  //   | 'Max Profit from Stock Prices';
-  // const problemDescriptions: Record<ProblemKey, string> = {
-  //   'Two Sum':
-  //     'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice. You can return the answer in any order.',
-  //   'Reverse Linked List':
-  //     'Given the head of a singly linked list, reverse the list and return its new head.',
-  //   'Merge Sorted Arrays': 'Given two sorted arrays, merge them into one sorted array.',
-  //   'Longest Substring Without Repeating Characters':
-  //     'Given a string s, find the length of the longest substring without repeating characters.',
-  //   'Palindrome Check': 'Given an string x, return true if x is a palindrome, and false otherwise.',
-  //   'Max Profit from Stock Prices':
-  //     'You are given an array prices where prices[i] is the price of a given stock on the ith day. Find the maximum profit you can achieve by buying and selling at different days.',
-  // };
   const navigate = useNavigate();
+  const location = useLocation();
+  // The Home page chose the problem and already sent it with start_interview.
+  const problemName = ((location.state as { problem?: ProblemKey } | null)?.problem ??
+    'Two Sum') as ProblemKey;
+  const problemText = problemDescriptions[problemName] ?? '';
 
   useEffect(() => {
-    // Listen for real-time code updates from the backend
-    socket.on('update_code', (data) => {
-      setCode(data.code);
-    });
-
-    return () => {
-      socket.off('update_code');
-    };
-  }, []);
-
-  useEffect(() => {
-    socket.on('status_update', (data) => {
+    const onStatus = (data: { status?: string }) => {
       if (data.status) {
         setStatus(data.status);
       }
-    });
-
+    };
+    const onFeedback = (data: { text?: string }) => setFeedback(data.text ?? null);
+    const onEnded = () => setInterviewActive(false);
+    const onError = (data: { message?: string }) => setError(data.message ?? 'Unknown error');
+    socket.on('status_update', onStatus);
+    socket.on('feedback', onFeedback);
+    socket.on('interview_ended', onEnded);
+    socket.on('error', onError);
     return () => {
-      socket.off('status_update');
+      socket.off('status_update', onStatus);
+      socket.off('feedback', onFeedback);
+      socket.off('interview_ended', onEnded);
+      socket.off('error', onError);
     };
   }, []);
 
-  useEffect(() => {
-    // Get a random problem from the available problem keys
-    const randomProblemKey = Object.keys(problemDescriptions)[
-      Math.floor(Math.random() * Object.keys(problemDescriptions).length)
-    ] as ProblemKey;
-
-    // Set the problem text and send the problem name to the backend
-    setProblemName(randomProblemKey);
-    setProblemText(problemDescriptions[randomProblemKey]);
-
-    // Emit the selected problem to the backend
-    socket.emit('send_problem', randomProblemKey);
-  }, []);
-
-  // Emit code updates in real-time as the user types
+  // Send code to the backend as the candidate types.
   const handleCodeChange = (newValue: string | undefined) => {
-    setCode(newValue || '');
-    socket.emit('send_code', { code: newValue });
+    socket.emit('send_code', { code: newValue ?? '' });
   };
 
   const endInterview = () => {
     socket.emit('end_interview');
-    setInterviewActive(false);
-    navigate('/');
   };
 
   return (
@@ -183,11 +147,21 @@ const CodeEditor = () => {
                 color: colorScheme === 'dark' ? '#FFFFFF' : '#000000', // Dynamically change color
                 fontSize: '15px',
                 lineHeight: '1.5',
-                whiteSpace: 'pre-line', 
+                whiteSpace: 'pre-line',
               }}
             >
               {problemText}
             </Text>
+            {feedback && (
+              <Text mt="lg" size="md" fw={600}>
+                Interviewer feedback: {feedback}
+              </Text>
+            )}
+            {error && (
+              <Text mt="lg" c="red">
+                {error}
+              </Text>
+            )}
           </Container>
         </Grid.Col>
 
@@ -228,16 +202,21 @@ const CodeEditor = () => {
                   </Text>
                 </Group>
 
-                <Button
-                  size="lg"
-                  radius="xl"
-                  variant="gradient"
-                  gradient={{ from: '#2D3F93', to: '#1E3A8A' }}
-                  onClick={endInterview}
-                  disabled={!interviewActive}
-                >
-                  Finish
-                </Button>
+                {interviewActive ? (
+                  <Button
+                    size="lg"
+                    radius="xl"
+                    variant="gradient"
+                    gradient={{ from: '#2D3F93', to: '#1E3A8A' }}
+                    onClick={endInterview}
+                  >
+                    Finish
+                  </Button>
+                ) : (
+                  <Button size="lg" radius="xl" onClick={() => navigate('/')}>
+                    Back to home
+                  </Button>
+                )}
               </Group>
 
               {/* Monaco Editor */}
@@ -248,7 +227,7 @@ const CodeEditor = () => {
                 <Editor
                   height="calc(100vh - 80px)"
                   language={language}
-                  value={`//Type your solution here`}
+                  defaultValue="# Type your solution here"
                   onChange={handleCodeChange}
                   theme={monacoTheme}
                   options={{

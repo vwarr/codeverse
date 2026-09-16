@@ -1,99 +1,83 @@
-import React, { useEffect, useState } from 'react';
-import { Center, Button } from '@mantine/core';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
-import pfp from '../components/pfp.jpg'; // Replace with your image path
-import './pulsingCircle.css'; // CSS for the pulsing effect
+import { Button, Center, Text } from '@mantine/core';
+import pfp from '../components/pfp.jpg';
+import { socket } from '../lib/socket';
 
-// Connect to the backend running on port 5100
-const socket = io('http://localhost:5100');
+import './pulsingCircle.css';
 
+// The interview is started from the Home page (one start_interview emit). This
+// page only reflects state and offers Finish.
 function IBInterview() {
   const navigate = useNavigate();
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [interviewStarted, setInterviewStarted] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Listen for events from the backend
-    socket.on("audio_started", () => {
-      setAudioPlaying(true);
-    });
-
-    socket.on("audio_finished", () => {
-      setAudioPlaying(false);
-    });
-
-    socket.on("interview_started", () => {
-      setInterviewStarted(true);
-    });
-
-    socket.on("interview_ended", () => {
-      setInterviewStarted(false);
-    });
-
-    // Cleanup listeners on component unmount
+    const onStatus = (data: { status?: string }) => setAudioPlaying(data.status === 'Status 3');
+    const onFeedback = (data: { text?: string }) => setFeedback(data.text ?? null);
+    const onError = (data: { message?: string }) => setError(data.message ?? 'Unknown error');
+    socket.on('status_update', onStatus);
+    socket.on('feedback', onFeedback);
+    socket.on('error', onError);
     return () => {
-      socket.off("audio_started");
-      socket.off("audio_finished");
-      socket.off("interview_started");
-      socket.off("interview_ended");
+      socket.off('status_update', onStatus);
+      socket.off('feedback', onFeedback);
+      socket.off('error', onError);
     };
   }, []);
 
-  const startInterview = () => {
-    socket.emit("start_interview");
-  };
-
   const endInterview = () => {
-    socket.emit("end_interview");
-    navigate("/");
+    socket.emit('end_interview');
   };
 
   return (
-    <div style={{ position: "relative", height: "100vh" }}>
-      {/* Button in top right */}
-      <div style={{ position: "absolute", top: "20px", right: "20px", zIndex: 2 }}>
-        {!interviewStarted ? (
-          <Button
-            size="lg"
-            radius="xl"
-            variant="gradient"
-            gradient={{ from: "#266181", to: "#58D3E3" }}
-            onClick={startInterview}
-          >
-            Start Interview
+    <div style={{ position: 'relative', height: '100vh' }}>
+      <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 2 }}>
+        {feedback ? (
+          <Button size="lg" radius="xl" onClick={() => navigate('/')}>
+            Back to home
           </Button>
         ) : (
           <Button
             size="lg"
             radius="xl"
             variant="gradient"
-            gradient={{ from: "#266181", to: "#58D3E3" }}
+            gradient={{ from: '#266181', to: '#58D3E3' }}
             onClick={endInterview}
           >
             Finish Interview
           </Button>
         )}
       </div>
-      
-      {/* Main Content */}
-      <Center style={{ height: "100%", flexDirection: "column" }}>
-        {/* Profile picture with pulsing circle */}
-        <div style={{ position: "relative", width: 200, height: 200, marginBottom: 40 }}>
-          <div className={audioPlaying ? "pulsing-circle active" : "pulsing-circle"} />
+
+      <Center style={{ height: '100%', flexDirection: 'column' }}>
+        <div style={{ position: 'relative', width: 200, height: 200, marginBottom: 40 }}>
+          <div className={audioPlaying ? 'pulsing-circle active' : 'pulsing-circle'} />
           <img
             src={pfp}
             alt="Interviewer"
             style={{
-              width: "200px",
-              height: "200px",
-              borderRadius: "50%",
-              objectFit: "cover",
-              position: "relative",
+              width: '200px',
+              height: '200px',
+              borderRadius: '50%',
+              objectFit: 'cover',
+              position: 'relative',
               zIndex: 1,
             }}
           />
         </div>
+        {feedback && (
+          <Text size="lg" style={{ maxWidth: 640, textAlign: 'center' }}>
+            {feedback}
+          </Text>
+        )}
+        {error && (
+          <Text c="red" style={{ maxWidth: 640, textAlign: 'center' }}>
+            {error}
+          </Text>
+        )}
       </Center>
     </div>
   );

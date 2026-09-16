@@ -1,35 +1,53 @@
-# Codeverse  
+# Codeverse
 
-Codeverse is an AI-powered technical interviewer designed to simulate software engineering and financial interview scenarios. It provides real-time, interactive feedback on both coding and communication skills, helping users prepare for high-stakes technical interviews.  
+Codeverse is an AI-powered technical interviewer that simulates software engineering and finance interviews with a live, spoken conversation. It asks follow-ups, nudges you back on track, and gives feedback on how you communicated and solved the problem.
 
-## Features  
+## Features
 
-- **Live AI-Powered Interview Simulation** – Receive real-time feedback on code efficiency, problem-solving strategies, and communication clarity.  
-- **Speech-to-Text Processing** – Converts spoken thoughts into text to analyze reasoning.  
-- **Dynamic AI Responses** – Asks follow-up and clarification questions, provides hints, and offers structured feedback.  
-- **Real-Time Code Evaluation** – Supports multi-language syntax highlighting and execution.  
-- **Seamless Audio & Code Integration** – Uses Gemini API and Google Cloud TTS for natural, responsive conversation.  
+- **Live spoken interview** – the interviewer listens, thinks, and talks back in real time.
+- **SWE track** – a coding problem in a Monaco editor; the interviewer sees your code as you type.
+- **IB track** – a conversational investment-banking interview.
+- **Closing feedback** – a short spoken assessment when you finish.
 
-## Tech Stack  
+## Tech stack
 
-- **Frontend**: TypeScript, Mantine 
-- **Backend**: Flask, Gemini API, Google Cloud TTS, Python  
-- **Real-Time Communication**: Socket.io, Multithreading for fast response handling  
+- **Frontend**: React, TypeScript, Mantine, Monaco, Socket.IO client
+- **Backend**: Flask + Flask-SocketIO, Gemini API, Google Cloud TTS, RealtimeSTT
 
-## Setup Instructions  
-1. **Install dependencies**
-   ```sh
-   pip install -r backend/requirements.txt
-   npm install 
-2. **Run the backend**
+> **Current limitation (Phase 0):** speech-to-text and text-to-speech run on the machine hosting the backend, so the browser and the backend must be on the same computer. Moving audio into the browser is the next milestone.
+
+## Setup
+
+1. Backend
+
    ```sh
    cd backend
+   python -m venv venv && source venv/bin/activate
+   pip install -r requirements.txt
+   cp .env.example .env   # fill in GEMINI_API_KEY and the audio paths
    python main.py
-3. **Run the fronend**
-   ```sh
-   npm run dev
+   ```
 
-# Future Improvements
-- Personalized learning paths based on interview performance
-- Additional problem categories (quant, data science, cybersecurity)
-- Enhanced analytics for tracking progress over time
+   Google Cloud TTS uses application-default credentials (`gcloud auth application-default login`).
+
+2. Frontend
+
+   ```sh
+   npm install
+   npm run dev
+   ```
+
+   Set `VITE_BACKEND_URL` if the backend is not on `http://localhost:5100`.
+
+## Development
+
+```sh
+npm test          # typecheck, prettier, eslint, vitest, build
+```
+
+## Roadmap
+
+- Browser-side audio via a swappable voice backend (Gemini Live first)
+- Structured end-of-interview report
+- Problem bank with test cases and code execution
+- Session history and progress tracking
