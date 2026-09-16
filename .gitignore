@@ -133,8 +133,14 @@ dist
 
 # Ignore venv directory in backend
 /backend/venv
+/backend/.venv
 /venv
 .env
 
 # Ignore __pycache__ directories
 **/__pycache__/
+
+# backend
+backend/.venv
+backend/uv.lock.tmp
+.ruff_cache

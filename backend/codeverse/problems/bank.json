@@ -1,0 +1,1773 @@
+[
+  {
+    "id": "two-sum",
+    "title": "Two Sum",
+    "difficulty": "easy",
+    "tags": [
+      "array",
+      "hash-map"
+    ],
+    "statement": "Given an array of integers `nums` and an integer `target`, return the indices of the two numbers such that they add up to `target`.\n\nYou may assume that each input has exactly one solution, and you may not use the same element twice. You can return the answer in any order.",
+    "examples": [
+      {
+        "input": "nums = [2, 7, 11, 15], target = 9",
+        "output": "[0, 1]",
+        "explanation": "2 + 7 = 9"
+      },
+      {
+        "input": "nums = [3, 2, 4], target = 6",
+        "output": "[1, 2]"
+      }
+    ],
+    "constraints": [
+      "2 <= nums.length <= 10^4",
+      "-10^9 <= nums[i] <= 10^9",
+      "exactly one valid answer exists"
+    ],
+    "hints": [
+      "What information would you need to have seen already when you reach each element?",
+      "A hash map from value to index gives O(1) lookups."
+    ],
+    "function_name": "two_sum",
+    "starter_code": {
+      "python": "def two_sum(nums, target):\n    pass\n",
+      "javascript": "function two_sum(nums, target) {\n  \n}\n",
+      "typescript": "function two_sum(nums, target) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            2,
+            7,
+            11,
+            15
+          ],
+          9
+        ],
+        "expected": [
+          0,
+          1
+        ]
+      },
+      {
+        "args": [
+          [
+            3,
+            2,
+            4
+          ],
+          6
+        ],
+        "expected": [
+          1,
+          2
+        ]
+      },
+      {
+        "args": [
+          [
+            3,
+            3
+          ],
+          6
+        ],
+        "expected": [
+          0,
+          1
+        ]
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "reverse-linked-list",
+    "title": "Reverse Linked List",
+    "difficulty": "easy",
+    "tags": [
+      "linked-list"
+    ],
+    "statement": "Given the `head` of a singly linked list, reverse the list and return the new head.",
+    "examples": [
+      {
+        "input": "head = [1, 2, 3, 4, 5]",
+        "output": "[5, 4, 3, 2, 1]"
+      },
+      {
+        "input": "head = [1, 2]",
+        "output": "[2, 1]"
+      },
+      {
+        "input": "head = []",
+        "output": "[]"
+      }
+    ],
+    "constraints": [
+      "0 <= number of nodes <= 5000"
+    ],
+    "hints": [
+      "Keep three pointers: previous, current, next.",
+      "Can you do it recursively? What is the base case?"
+    ],
+    "function_name": "reverse_list",
+    "starter_code": {
+      "python": "def reverse_list(head):\n    pass\n",
+      "javascript": "function reverse_list(head) {\n  \n}\n",
+      "typescript": "function reverse_list(head) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "merge-sorted-arrays",
+    "title": "Merge Sorted Arrays",
+    "difficulty": "easy",
+    "tags": [
+      "array",
+      "two-pointers"
+    ],
+    "statement": "Given two sorted integer arrays `nums1` and `nums2`, merge them into a single sorted array and return it.",
+    "examples": [
+      {
+        "input": "nums1 = [1, 2, 3], nums2 = [2, 5, 6]",
+        "output": "[1, 2, 2, 3, 5, 6]"
+      },
+      {
+        "input": "nums1 = [0], nums2 = [1]",
+        "output": "[0, 1]"
+      }
+    ],
+    "constraints": [
+      "0 <= nums1.length, nums2.length <= 10^4"
+    ],
+    "hints": [
+      "Two pointers, one per array; always take the smaller head.",
+      "What happens when one array runs out?"
+    ],
+    "function_name": "merge",
+    "starter_code": {
+      "python": "def merge(nums1, nums2):\n    pass\n",
+      "javascript": "function merge(nums1, nums2) {\n  \n}\n",
+      "typescript": "function merge(nums1, nums2) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            1,
+            2,
+            3
+          ],
+          [
+            2,
+            5,
+            6
+          ]
+        ],
+        "expected": [
+          1,
+          2,
+          2,
+          3,
+          5,
+          6
+        ]
+      },
+      {
+        "args": [
+          [
+            0
+          ],
+          [
+            1
+          ]
+        ],
+        "expected": [
+          0,
+          1
+        ]
+      },
+      {
+        "args": [
+          [],
+          [
+            1,
+            2
+          ]
+        ],
+        "expected": [
+          1,
+          2
+        ]
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "longest-substring-without-repeating",
+    "title": "Longest Substring Without Repeating Characters",
+    "difficulty": "medium",
+    "tags": [
+      "string",
+      "sliding-window",
+      "hash-map"
+    ],
+    "statement": "Given a string `s`, find the length of the longest substring without repeating characters.",
+    "examples": [
+      {
+        "input": "s = \"abcabcbb\"",
+        "output": "3",
+        "explanation": "\"abc\""
+      },
+      {
+        "input": "s = \"bbbbb\"",
+        "output": "1"
+      },
+      {
+        "input": "s = \"pwwkew\"",
+        "output": "3",
+        "explanation": "\"wke\"; note \"pwke\" is a subsequence, not a substring"
+      }
+    ],
+    "constraints": [
+      "0 <= s.length <= 5 * 10^4",
+      "s consists of English letters, digits, symbols and spaces"
+    ],
+    "hints": [
+      "Sliding window: extend the right edge, shrink the left when a repeat appears.",
+      "Store the last index of each character so the left edge can jump."
+    ],
+    "function_name": "length_of_longest_substring",
+    "starter_code": {
+      "python": "def length_of_longest_substring(s):\n    pass\n",
+      "javascript": "function length_of_longest_substring(s) {\n  \n}\n",
+      "typescript": "function length_of_longest_substring(s) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          "abcabcbb"
+        ],
+        "expected": 3
+      },
+      {
+        "args": [
+          "bbbbb"
+        ],
+        "expected": 1
+      },
+      {
+        "args": [
+          "pwwkew"
+        ],
+        "expected": 3
+      },
+      {
+        "args": [
+          ""
+        ],
+        "expected": 0
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "valid-palindrome",
+    "title": "Valid Palindrome",
+    "difficulty": "easy",
+    "tags": [
+      "string",
+      "two-pointers"
+    ],
+    "statement": "Given a string `s`, return `true` if it is a palindrome after converting all uppercase letters to lowercase and removing all non-alphanumeric characters, and `false` otherwise.",
+    "examples": [
+      {
+        "input": "s = \"A man, a plan, a canal: Panama\"",
+        "output": "true"
+      },
+      {
+        "input": "s = \"race a car\"",
+        "output": "false"
+      },
+      {
+        "input": "s = \" \"",
+        "output": "true",
+        "explanation": "empty after filtering"
+      }
+    ],
+    "constraints": [
+      "1 <= s.length <= 2 * 10^5"
+    ],
+    "hints": [
+      "Two pointers from both ends, skipping non-alphanumerics."
+    ],
+    "function_name": "is_palindrome",
+    "starter_code": {
+      "python": "def is_palindrome(s):\n    pass\n",
+      "javascript": "function is_palindrome(s) {\n  \n}\n",
+      "typescript": "function is_palindrome(s) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          "A man, a plan, a canal: Panama"
+        ],
+        "expected": true
+      },
+      {
+        "args": [
+          "race a car"
+        ],
+        "expected": false
+      },
+      {
+        "args": [
+          " "
+        ],
+        "expected": true
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "best-time-to-buy-and-sell-stock",
+    "title": "Best Time to Buy and Sell Stock",
+    "difficulty": "easy",
+    "tags": [
+      "array",
+      "greedy"
+    ],
+    "statement": "You are given an array `prices` where `prices[i]` is the price of a stock on day `i`. Choose one day to buy and a later day to sell. Return the maximum profit you can achieve. If no profit is possible, return 0.",
+    "examples": [
+      {
+        "input": "prices = [7, 1, 5, 3, 6, 4]",
+        "output": "5",
+        "explanation": "buy on day 2 (price 1), sell on day 5 (price 6)"
+      },
+      {
+        "input": "prices = [7, 6, 4, 3, 1]",
+        "output": "0"
+      }
+    ],
+    "constraints": [
+      "1 <= prices.length <= 10^5",
+      "0 <= prices[i] <= 10^4"
+    ],
+    "hints": [
+      "Track the minimum price seen so far as you scan.",
+      "One pass is enough."
+    ],
+    "function_name": "max_profit",
+    "starter_code": {
+      "python": "def max_profit(prices):\n    pass\n",
+      "javascript": "function max_profit(prices) {\n  \n}\n",
+      "typescript": "function max_profit(prices) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            7,
+            1,
+            5,
+            3,
+            6,
+            4
+          ]
+        ],
+        "expected": 5
+      },
+      {
+        "args": [
+          [
+            7,
+            6,
+            4,
+            3,
+            1
+          ]
+        ],
+        "expected": 0
+      },
+      {
+        "args": [
+          [
+            2,
+            4,
+            1
+          ]
+        ],
+        "expected": 2
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "valid-parentheses",
+    "title": "Valid Parentheses",
+    "difficulty": "easy",
+    "tags": [
+      "string",
+      "stack"
+    ],
+    "statement": "Given a string `s` containing only the characters `(`, `)`, `{`, `}`, `[` and `]`, determine whether the input is valid: every open bracket is closed by the same type of bracket, in the correct order.",
+    "examples": [
+      {
+        "input": "s = \"()[]{}\"",
+        "output": "true"
+      },
+      {
+        "input": "s = \"(]\"",
+        "output": "false"
+      },
+      {
+        "input": "s = \"([)]\"",
+        "output": "false"
+      }
+    ],
+    "constraints": [
+      "1 <= s.length <= 10^4"
+    ],
+    "hints": [
+      "What data structure matches 'most recently opened must close first'?"
+    ],
+    "function_name": "is_valid",
+    "starter_code": {
+      "python": "def is_valid(s):\n    pass\n",
+      "javascript": "function is_valid(s) {\n  \n}\n",
+      "typescript": "function is_valid(s) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          "()[]{}"
+        ],
+        "expected": true
+      },
+      {
+        "args": [
+          "(]"
+        ],
+        "expected": false
+      },
+      {
+        "args": [
+          "([)]"
+        ],
+        "expected": false
+      },
+      {
+        "args": [
+          "{[]}"
+        ],
+        "expected": true
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "maximum-subarray",
+    "title": "Maximum Subarray",
+    "difficulty": "medium",
+    "tags": [
+      "array",
+      "dynamic-programming"
+    ],
+    "statement": "Given an integer array `nums`, find the contiguous subarray with the largest sum and return that sum.",
+    "examples": [
+      {
+        "input": "nums = [-2, 1, -3, 4, -1, 2, 1, -5, 4]",
+        "output": "6",
+        "explanation": "[4, -1, 2, 1]"
+      },
+      {
+        "input": "nums = [1]",
+        "output": "1"
+      },
+      {
+        "input": "nums = [5, 4, -1, 7, 8]",
+        "output": "23"
+      }
+    ],
+    "constraints": [
+      "1 <= nums.length <= 10^5",
+      "-10^4 <= nums[i] <= 10^4"
+    ],
+    "hints": [
+      "At each index, is it better to extend the previous subarray or start fresh?",
+      "This is Kadane's algorithm."
+    ],
+    "function_name": "max_sub_array",
+    "starter_code": {
+      "python": "def max_sub_array(nums):\n    pass\n",
+      "javascript": "function max_sub_array(nums) {\n  \n}\n",
+      "typescript": "function max_sub_array(nums) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            -2,
+            1,
+            -3,
+            4,
+            -1,
+            2,
+            1,
+            -5,
+            4
+          ]
+        ],
+        "expected": 6
+      },
+      {
+        "args": [
+          [
+            1
+          ]
+        ],
+        "expected": 1
+      },
+      {
+        "args": [
+          [
+            -1,
+            -2
+          ]
+        ],
+        "expected": -1
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "contains-duplicate",
+    "title": "Contains Duplicate",
+    "difficulty": "easy",
+    "tags": [
+      "array",
+      "hash-set"
+    ],
+    "statement": "Given an integer array `nums`, return `true` if any value appears at least twice, and `false` if every element is distinct.",
+    "examples": [
+      {
+        "input": "nums = [1, 2, 3, 1]",
+        "output": "true"
+      },
+      {
+        "input": "nums = [1, 2, 3, 4]",
+        "output": "false"
+      }
+    ],
+    "constraints": [
+      "1 <= nums.length <= 10^5"
+    ],
+    "hints": [
+      "A set gives O(1) membership checks.",
+      "Can you do it without extra space? What does sorting cost?"
+    ],
+    "function_name": "contains_duplicate",
+    "starter_code": {
+      "python": "def contains_duplicate(nums):\n    pass\n",
+      "javascript": "function contains_duplicate(nums) {\n  \n}\n",
+      "typescript": "function contains_duplicate(nums) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            1,
+            2,
+            3,
+            1
+          ]
+        ],
+        "expected": true
+      },
+      {
+        "args": [
+          [
+            1,
+            2,
+            3,
+            4
+          ]
+        ],
+        "expected": false
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "valid-anagram",
+    "title": "Valid Anagram",
+    "difficulty": "easy",
+    "tags": [
+      "string",
+      "hash-map"
+    ],
+    "statement": "Given two strings `s` and `t`, return `true` if `t` is an anagram of `s`, and `false` otherwise.",
+    "examples": [
+      {
+        "input": "s = \"anagram\", t = \"nagaram\"",
+        "output": "true"
+      },
+      {
+        "input": "s = \"rat\", t = \"car\"",
+        "output": "false"
+      }
+    ],
+    "constraints": [
+      "1 <= s.length, t.length <= 5 * 10^4",
+      "lowercase English letters"
+    ],
+    "hints": [
+      "Count characters. What if the alphabet is small and fixed?"
+    ],
+    "function_name": "is_anagram",
+    "starter_code": {
+      "python": "def is_anagram(s, t):\n    pass\n",
+      "javascript": "function is_anagram(s, t) {\n  \n}\n",
+      "typescript": "function is_anagram(s, t) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          "anagram",
+          "nagaram"
+        ],
+        "expected": true
+      },
+      {
+        "args": [
+          "rat",
+          "car"
+        ],
+        "expected": false
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "binary-search",
+    "title": "Binary Search",
+    "difficulty": "easy",
+    "tags": [
+      "array",
+      "binary-search"
+    ],
+    "statement": "Given a sorted array of distinct integers `nums` and an integer `target`, return the index of `target` if it exists, otherwise return -1. Your algorithm must run in O(log n) time.",
+    "examples": [
+      {
+        "input": "nums = [-1, 0, 3, 5, 9, 12], target = 9",
+        "output": "4"
+      },
+      {
+        "input": "nums = [-1, 0, 3, 5, 9, 12], target = 2",
+        "output": "-1"
+      }
+    ],
+    "constraints": [
+      "1 <= nums.length <= 10^4",
+      "all elements are unique and sorted ascending"
+    ],
+    "hints": [
+      "Be precise about whether your bounds are inclusive or exclusive.",
+      "How do you avoid an infinite loop when lo and hi are adjacent?"
+    ],
+    "function_name": "search",
+    "starter_code": {
+      "python": "def search(nums, target):\n    pass\n",
+      "javascript": "function search(nums, target) {\n  \n}\n",
+      "typescript": "function search(nums, target) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            -1,
+            0,
+            3,
+            5,
+            9,
+            12
+          ],
+          9
+        ],
+        "expected": 4
+      },
+      {
+        "args": [
+          [
+            -1,
+            0,
+            3,
+            5,
+            9,
+            12
+          ],
+          2
+        ],
+        "expected": -1
+      },
+      {
+        "args": [
+          [
+            5
+          ],
+          5
+        ],
+        "expected": 0
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "climbing-stairs",
+    "title": "Climbing Stairs",
+    "difficulty": "easy",
+    "tags": [
+      "dynamic-programming"
+    ],
+    "statement": "You are climbing a staircase with `n` steps. Each time you can climb either 1 or 2 steps. In how many distinct ways can you reach the top?",
+    "examples": [
+      {
+        "input": "n = 2",
+        "output": "2",
+        "explanation": "1+1, 2"
+      },
+      {
+        "input": "n = 3",
+        "output": "3",
+        "explanation": "1+1+1, 1+2, 2+1"
+      }
+    ],
+    "constraints": [
+      "1 <= n <= 45"
+    ],
+    "hints": [
+      "How do you reach step n? From n-1 or n-2.",
+      "Do you need the whole table, or just the last two values?"
+    ],
+    "function_name": "climb_stairs",
+    "starter_code": {
+      "python": "def climb_stairs(n):\n    pass\n",
+      "javascript": "function climb_stairs(n) {\n  \n}\n",
+      "typescript": "function climb_stairs(n) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          2
+        ],
+        "expected": 2
+      },
+      {
+        "args": [
+          3
+        ],
+        "expected": 3
+      },
+      {
+        "args": [
+          10
+        ],
+        "expected": 89
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "merge-two-sorted-lists",
+    "title": "Merge Two Sorted Lists",
+    "difficulty": "easy",
+    "tags": [
+      "linked-list",
+      "recursion"
+    ],
+    "statement": "You are given the heads of two sorted linked lists `list1` and `list2`. Merge them into one sorted list by splicing together the nodes, and return the head of the merged list.",
+    "examples": [
+      {
+        "input": "list1 = [1, 2, 4], list2 = [1, 3, 4]",
+        "output": "[1, 1, 2, 3, 4, 4]"
+      },
+      {
+        "input": "list1 = [], list2 = [0]",
+        "output": "[0]"
+      }
+    ],
+    "constraints": [
+      "0 <= nodes in each list <= 50"
+    ],
+    "hints": [
+      "A dummy head node removes the special case for the first element."
+    ],
+    "function_name": "merge_two_lists",
+    "starter_code": {
+      "python": "def merge_two_lists(list1, list2):\n    pass\n",
+      "javascript": "function merge_two_lists(list1, list2) {\n  \n}\n",
+      "typescript": "function merge_two_lists(list1, list2) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "product-of-array-except-self",
+    "title": "Product of Array Except Self",
+    "difficulty": "medium",
+    "tags": [
+      "array",
+      "prefix-sum"
+    ],
+    "statement": "Given an integer array `nums`, return an array `answer` such that `answer[i]` is the product of all elements of `nums` except `nums[i]`. You must solve it without using division and in O(n) time.",
+    "examples": [
+      {
+        "input": "nums = [1, 2, 3, 4]",
+        "output": "[24, 12, 8, 6]"
+      },
+      {
+        "input": "nums = [-1, 1, 0, -3, 3]",
+        "output": "[0, 0, 9, 0, 0]"
+      }
+    ],
+    "constraints": [
+      "2 <= nums.length <= 10^5",
+      "the product of any prefix or suffix fits in a 32-bit integer"
+    ],
+    "hints": [
+      "Prefix products from the left, suffix products from the right.",
+      "Can the output array hold one of the two passes?"
+    ],
+    "function_name": "product_except_self",
+    "starter_code": {
+      "python": "def product_except_self(nums):\n    pass\n",
+      "javascript": "function product_except_self(nums) {\n  \n}\n",
+      "typescript": "function product_except_self(nums) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            1,
+            2,
+            3,
+            4
+          ]
+        ],
+        "expected": [
+          24,
+          12,
+          8,
+          6
+        ]
+      },
+      {
+        "args": [
+          [
+            -1,
+            1,
+            0,
+            -3,
+            3
+          ]
+        ],
+        "expected": [
+          0,
+          0,
+          9,
+          0,
+          0
+        ]
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "group-anagrams",
+    "title": "Group Anagrams",
+    "difficulty": "medium",
+    "tags": [
+      "string",
+      "hash-map",
+      "sorting"
+    ],
+    "statement": "Given an array of strings `strs`, group the anagrams together. You may return the groups in any order.",
+    "examples": [
+      {
+        "input": "strs = [\"eat\", \"tea\", \"tan\", \"ate\", \"nat\", \"bat\"]",
+        "output": "[[\"bat\"], [\"nat\", \"tan\"], [\"ate\", \"eat\", \"tea\"]]"
+      },
+      {
+        "input": "strs = [\"\"]",
+        "output": "[[\"\"]]"
+      }
+    ],
+    "constraints": [
+      "1 <= strs.length <= 10^4",
+      "0 <= strs[i].length <= 100"
+    ],
+    "hints": [
+      "What key do all anagrams of a word share?",
+      "Sorting each word costs k log k; a 26-count tuple costs k."
+    ],
+    "function_name": "group_anagrams",
+    "starter_code": {
+      "python": "def group_anagrams(strs):\n    pass\n",
+      "javascript": "function group_anagrams(strs) {\n  \n}\n",
+      "typescript": "function group_anagrams(strs) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "top-k-frequent-elements",
+    "title": "Top K Frequent Elements",
+    "difficulty": "medium",
+    "tags": [
+      "array",
+      "hash-map",
+      "heap",
+      "bucket-sort"
+    ],
+    "statement": "Given an integer array `nums` and an integer `k`, return the `k` most frequent elements. You may return the answer in any order.",
+    "examples": [
+      {
+        "input": "nums = [1, 1, 1, 2, 2, 3], k = 2",
+        "output": "[1, 2]"
+      },
+      {
+        "input": "nums = [1], k = 1",
+        "output": "[1]"
+      }
+    ],
+    "constraints": [
+      "1 <= nums.length <= 10^5",
+      "k is between 1 and the number of unique elements",
+      "the answer is unique"
+    ],
+    "hints": [
+      "Count first. Then what structure gives you the top k of the counts?",
+      "Bucket by frequency for O(n)."
+    ],
+    "function_name": "top_k_frequent",
+    "starter_code": {
+      "python": "def top_k_frequent(nums, k):\n    pass\n",
+      "javascript": "function top_k_frequent(nums, k) {\n  \n}\n",
+      "typescript": "function top_k_frequent(nums, k) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "three-sum",
+    "title": "3Sum",
+    "difficulty": "medium",
+    "tags": [
+      "array",
+      "two-pointers",
+      "sorting"
+    ],
+    "statement": "Given an integer array `nums`, return all unique triplets `[nums[i], nums[j], nums[k]]` such that `i != j != k` and `nums[i] + nums[j] + nums[k] == 0`. The solution set must not contain duplicate triplets.",
+    "examples": [
+      {
+        "input": "nums = [-1, 0, 1, 2, -1, -4]",
+        "output": "[[-1, -1, 2], [-1, 0, 1]]"
+      },
+      {
+        "input": "nums = [0, 1, 1]",
+        "output": "[]"
+      },
+      {
+        "input": "nums = [0, 0, 0]",
+        "output": "[[0, 0, 0]]"
+      }
+    ],
+    "constraints": [
+      "3 <= nums.length <= 3000",
+      "-10^5 <= nums[i] <= 10^5"
+    ],
+    "hints": [
+      "Sort, fix one element, then two-sum the rest with two pointers.",
+      "How do you skip duplicates at each of the three positions?"
+    ],
+    "function_name": "three_sum",
+    "starter_code": {
+      "python": "def three_sum(nums):\n    pass\n",
+      "javascript": "function three_sum(nums) {\n  \n}\n",
+      "typescript": "function three_sum(nums) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "container-with-most-water",
+    "title": "Container With Most Water",
+    "difficulty": "medium",
+    "tags": [
+      "array",
+      "two-pointers",
+      "greedy"
+    ],
+    "statement": "You are given an integer array `height` of length `n`. There are `n` vertical lines where the two endpoints of the i-th line are `(i, 0)` and `(i, height[i])`. Find two lines that together with the x-axis form a container holding the most water. Return the maximum amount of water.",
+    "examples": [
+      {
+        "input": "height = [1, 8, 6, 2, 5, 4, 8, 3, 7]",
+        "output": "49"
+      },
+      {
+        "input": "height = [1, 1]",
+        "output": "1"
+      }
+    ],
+    "constraints": [
+      "2 <= n <= 10^5",
+      "0 <= height[i] <= 10^4"
+    ],
+    "hints": [
+      "Start with the widest container. Which side is it safe to move inward?"
+    ],
+    "function_name": "max_area",
+    "starter_code": {
+      "python": "def max_area(height):\n    pass\n",
+      "javascript": "function max_area(height) {\n  \n}\n",
+      "typescript": "function max_area(height) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            1,
+            8,
+            6,
+            2,
+            5,
+            4,
+            8,
+            3,
+            7
+          ]
+        ],
+        "expected": 49
+      },
+      {
+        "args": [
+          [
+            1,
+            1
+          ]
+        ],
+        "expected": 1
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "number-of-islands",
+    "title": "Number of Islands",
+    "difficulty": "medium",
+    "tags": [
+      "grid",
+      "bfs",
+      "dfs",
+      "union-find"
+    ],
+    "statement": "Given an `m x n` 2D grid of `'1'`s (land) and `'0'`s (water), return the number of islands. An island is surrounded by water and formed by connecting adjacent land cells horizontally or vertically.",
+    "examples": [
+      {
+        "input": "grid = [[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"1\",\"1\",\"0\",\"0\",\"0\"],[\"0\",\"0\",\"1\",\"0\",\"0\"],[\"0\",\"0\",\"0\",\"1\",\"1\"]]",
+        "output": "3"
+      }
+    ],
+    "constraints": [
+      "1 <= m, n <= 300"
+    ],
+    "hints": [
+      "Flood fill from each unvisited land cell.",
+      "Can you mark visited cells without extra memory?"
+    ],
+    "function_name": "num_islands",
+    "starter_code": {
+      "python": "def num_islands(grid):\n    pass\n",
+      "javascript": "function num_islands(grid) {\n  \n}\n",
+      "typescript": "function num_islands(grid) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "coin-change",
+    "title": "Coin Change",
+    "difficulty": "medium",
+    "tags": [
+      "dynamic-programming"
+    ],
+    "statement": "You are given an integer array `coins` representing coins of different denominations and an integer `amount`. Return the fewest number of coins needed to make up that amount. If it cannot be made up, return -1. You have an infinite supply of each coin.",
+    "examples": [
+      {
+        "input": "coins = [1, 2, 5], amount = 11",
+        "output": "3",
+        "explanation": "5 + 5 + 1"
+      },
+      {
+        "input": "coins = [2], amount = 3",
+        "output": "-1"
+      },
+      {
+        "input": "coins = [1], amount = 0",
+        "output": "0"
+      }
+    ],
+    "constraints": [
+      "1 <= coins.length <= 12",
+      "0 <= amount <= 10^4"
+    ],
+    "hints": [
+      "Why does greedy (largest coin first) fail? Try coins [1, 3, 4] and amount 6.",
+      "dp[a] = 1 + min(dp[a - c]) over coins c."
+    ],
+    "function_name": "coin_change",
+    "starter_code": {
+      "python": "def coin_change(coins, amount):\n    pass\n",
+      "javascript": "function coin_change(coins, amount) {\n  \n}\n",
+      "typescript": "function coin_change(coins, amount) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            1,
+            2,
+            5
+          ],
+          11
+        ],
+        "expected": 3
+      },
+      {
+        "args": [
+          [
+            2
+          ],
+          3
+        ],
+        "expected": -1
+      },
+      {
+        "args": [
+          [
+            1
+          ],
+          0
+        ],
+        "expected": 0
+      },
+      {
+        "args": [
+          [
+            1,
+            3,
+            4
+          ],
+          6
+        ],
+        "expected": 2
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "lru-cache",
+    "title": "LRU Cache",
+    "difficulty": "medium",
+    "tags": [
+      "design",
+      "hash-map",
+      "linked-list"
+    ],
+    "statement": "Design a data structure that follows the constraints of a Least Recently Used (LRU) cache. Implement the class `LRUCache` with `__init__(capacity)`, `get(key)` which returns the value or -1, and `put(key, value)` which inserts or updates and evicts the least recently used key when capacity is exceeded. Both operations must run in O(1) average time.",
+    "examples": [
+      {
+        "input": "LRUCache(2); put(1,1); put(2,2); get(1); put(3,3); get(2); put(4,4); get(1); get(3); get(4)",
+        "output": "1, -1, -1, 3, 4"
+      }
+    ],
+    "constraints": [
+      "1 <= capacity <= 3000",
+      "up to 2 * 10^5 calls to get and put"
+    ],
+    "hints": [
+      "Which structure gives O(1) removal from the middle? Which gives O(1) lookup by key? Combine them.",
+      "In Python, what does OrderedDict give you for free?"
+    ],
+    "function_name": "LRUCache",
+    "starter_code": {
+      "python": "class LRUCache:\n    def __init__(self, capacity):\n        pass\n\n    def get(self, key):\n        pass\n\n    def put(self, key, value):\n        pass\n",
+      "javascript": "class LRUCache {\n  constructor(capacity) {}\n  get(key) {}\n  put(key, value) {}\n}\n",
+      "typescript": "class LRUCache {\n  constructor(capacity: number) {}\n  get(key: number): number {}\n  put(key: number, value: number): void {}\n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "kth-largest-element",
+    "title": "Kth Largest Element in an Array",
+    "difficulty": "medium",
+    "tags": [
+      "array",
+      "heap",
+      "quickselect"
+    ],
+    "statement": "Given an integer array `nums` and an integer `k`, return the k-th largest element in the array. Note that it is the k-th largest in sorted order, not the k-th distinct element. Can you do better than sorting?",
+    "examples": [
+      {
+        "input": "nums = [3, 2, 1, 5, 6, 4], k = 2",
+        "output": "5"
+      },
+      {
+        "input": "nums = [3, 2, 3, 1, 2, 4, 5, 5, 6], k = 4",
+        "output": "4"
+      }
+    ],
+    "constraints": [
+      "1 <= k <= nums.length <= 10^5"
+    ],
+    "hints": [
+      "A min-heap of size k.",
+      "Quickselect gives expected O(n)."
+    ],
+    "function_name": "find_kth_largest",
+    "starter_code": {
+      "python": "def find_kth_largest(nums, k):\n    pass\n",
+      "javascript": "function find_kth_largest(nums, k) {\n  \n}\n",
+      "typescript": "function find_kth_largest(nums, k) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            3,
+            2,
+            1,
+            5,
+            6,
+            4
+          ],
+          2
+        ],
+        "expected": 5
+      },
+      {
+        "args": [
+          [
+            3,
+            2,
+            3,
+            1,
+            2,
+            4,
+            5,
+            5,
+            6
+          ],
+          4
+        ],
+        "expected": 4
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "course-schedule",
+    "title": "Course Schedule",
+    "difficulty": "medium",
+    "tags": [
+      "graph",
+      "topological-sort",
+      "dfs"
+    ],
+    "statement": "There are `numCourses` courses labeled from 0 to `numCourses - 1`. You are given a list `prerequisites` where `prerequisites[i] = [a, b]` means you must take course `b` before course `a`. Return `true` if it is possible to finish all courses, otherwise `false`.",
+    "examples": [
+      {
+        "input": "numCourses = 2, prerequisites = [[1, 0]]",
+        "output": "true"
+      },
+      {
+        "input": "numCourses = 2, prerequisites = [[1, 0], [0, 1]]",
+        "output": "false"
+      }
+    ],
+    "constraints": [
+      "1 <= numCourses <= 2000",
+      "0 <= prerequisites.length <= 5000"
+    ],
+    "hints": [
+      "This is cycle detection in a directed graph.",
+      "Kahn's algorithm: repeatedly remove nodes with in-degree zero."
+    ],
+    "function_name": "can_finish",
+    "starter_code": {
+      "python": "def can_finish(num_courses, prerequisites):\n    pass\n",
+      "javascript": "function can_finish(numCourses, prerequisites) {\n  \n}\n",
+      "typescript": "function can_finish(numCourses, prerequisites) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          2,
+          [
+            [
+              1,
+              0
+            ]
+          ]
+        ],
+        "expected": true
+      },
+      {
+        "args": [
+          2,
+          [
+            [
+              1,
+              0
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        ],
+        "expected": false
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "longest-palindromic-substring",
+    "title": "Longest Palindromic Substring",
+    "difficulty": "medium",
+    "tags": [
+      "string",
+      "dynamic-programming"
+    ],
+    "statement": "Given a string `s`, return the longest palindromic substring in `s`.",
+    "examples": [
+      {
+        "input": "s = \"babad\"",
+        "output": "\"bab\"",
+        "explanation": "\"aba\" is also valid"
+      },
+      {
+        "input": "s = \"cbbd\"",
+        "output": "\"bb\""
+      }
+    ],
+    "constraints": [
+      "1 <= s.length <= 1000"
+    ],
+    "hints": [
+      "Expand around each center. How many centers are there for a string of length n?"
+    ],
+    "function_name": "longest_palindrome",
+    "starter_code": {
+      "python": "def longest_palindrome(s):\n    pass\n",
+      "javascript": "function longest_palindrome(s) {\n  \n}\n",
+      "typescript": "function longest_palindrome(s) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "word-break",
+    "title": "Word Break",
+    "difficulty": "medium",
+    "tags": [
+      "string",
+      "dynamic-programming"
+    ],
+    "statement": "Given a string `s` and a dictionary of strings `wordDict`, return `true` if `s` can be segmented into a space-separated sequence of one or more dictionary words. Words may be reused.",
+    "examples": [
+      {
+        "input": "s = \"leetcode\", wordDict = [\"leet\", \"code\"]",
+        "output": "true"
+      },
+      {
+        "input": "s = \"applepenapple\", wordDict = [\"apple\", \"pen\"]",
+        "output": "true"
+      },
+      {
+        "input": "s = \"catsandog\", wordDict = [\"cats\", \"dog\", \"sand\", \"and\", \"cat\"]",
+        "output": "false"
+      }
+    ],
+    "constraints": [
+      "1 <= s.length <= 300",
+      "1 <= wordDict.length <= 1000"
+    ],
+    "hints": [
+      "dp[i] = can s[:i] be segmented? Which earlier dp values does it depend on?"
+    ],
+    "function_name": "word_break",
+    "starter_code": {
+      "python": "def word_break(s, word_dict):\n    pass\n",
+      "javascript": "function word_break(s, wordDict) {\n  \n}\n",
+      "typescript": "function word_break(s, wordDict) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          "leetcode",
+          [
+            "leet",
+            "code"
+          ]
+        ],
+        "expected": true
+      },
+      {
+        "args": [
+          "catsandog",
+          [
+            "cats",
+            "dog",
+            "sand",
+            "and",
+            "cat"
+          ]
+        ],
+        "expected": false
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "trapping-rain-water",
+    "title": "Trapping Rain Water",
+    "difficulty": "hard",
+    "tags": [
+      "array",
+      "two-pointers",
+      "stack"
+    ],
+    "statement": "Given `n` non-negative integers representing an elevation map where the width of each bar is 1, compute how much water it can trap after raining.",
+    "examples": [
+      {
+        "input": "height = [0, 1, 0, 2, 1, 0, 1, 3, 2, 1, 2, 1]",
+        "output": "6"
+      },
+      {
+        "input": "height = [4, 2, 0, 3, 2, 5]",
+        "output": "9"
+      }
+    ],
+    "constraints": [
+      "1 <= n <= 2 * 10^4",
+      "0 <= height[i] <= 10^5"
+    ],
+    "hints": [
+      "Water above cell i = min(max to the left, max to the right) - height[i].",
+      "Two pointers let you avoid the two prefix arrays."
+    ],
+    "function_name": "trap",
+    "starter_code": {
+      "python": "def trap(height):\n    pass\n",
+      "javascript": "function trap(height) {\n  \n}\n",
+      "typescript": "function trap(height) {\n  \n}\n"
+    },
+    "tests": [
+      {
+        "args": [
+          [
+            0,
+            1,
+            0,
+            2,
+            1,
+            0,
+            1,
+            3,
+            2,
+            1,
+            2,
+            1
+          ]
+        ],
+        "expected": 6
+      },
+      {
+        "args": [
+          [
+            4,
+            2,
+            0,
+            3,
+            2,
+            5
+          ]
+        ],
+        "expected": 9
+      }
+    ],
+    "track": "swe"
+  },
+  {
+    "id": "merge-k-sorted-lists",
+    "title": "Merge k Sorted Lists",
+    "difficulty": "hard",
+    "tags": [
+      "linked-list",
+      "heap",
+      "divide-and-conquer"
+    ],
+    "statement": "You are given an array of `k` linked lists, each sorted in ascending order. Merge all the lists into one sorted linked list and return it.",
+    "examples": [
+      {
+        "input": "lists = [[1, 4, 5], [1, 3, 4], [2, 6]]",
+        "output": "[1, 1, 2, 3, 4, 4, 5, 6]"
+      },
+      {
+        "input": "lists = []",
+        "output": "[]"
+      }
+    ],
+    "constraints": [
+      "0 <= k <= 10^4",
+      "total nodes <= 10^4"
+    ],
+    "hints": [
+      "A heap of the k current heads gives O(N log k).",
+      "Divide and conquer by merging pairs also gives O(N log k)."
+    ],
+    "function_name": "merge_k_lists",
+    "starter_code": {
+      "python": "def merge_k_lists(lists):\n    pass\n",
+      "javascript": "function merge_k_lists(lists) {\n  \n}\n",
+      "typescript": "function merge_k_lists(lists) {\n  \n}\n"
+    },
+    "track": "swe"
+  },
+  {
+    "id": "ib-walk-me-through-dcf",
+    "title": "Walk me through a DCF",
+    "difficulty": "easy",
+    "tags": [
+      "valuation"
+    ],
+    "statement": "Walk the interviewer through a discounted cash flow valuation: projecting unlevered free cash flow, choosing a discount rate, computing terminal value, and getting from enterprise value to equity value per share.",
+    "hints": [
+      "Ask about the two terminal value methods.",
+      "Push on how WACC is built."
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "ib-three-statements",
+    "title": "How the three statements link",
+    "difficulty": "easy",
+    "tags": [
+      "accounting"
+    ],
+    "statement": "Explain how the income statement, balance sheet and cash flow statement connect, then walk through what happens to all three when depreciation increases by 10.",
+    "hints": [
+      "Tax shield.",
+      "Cash on the balance sheet must tie to the cash flow statement."
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "ib-ev-vs-equity",
+    "title": "Enterprise value vs equity value",
+    "difficulty": "easy",
+    "tags": [
+      "valuation"
+    ],
+    "statement": "Define enterprise value and equity value, explain how to bridge between them, and discuss which multiples pair with each and why.",
+    "hints": [
+      "Why is EV/EBITDA capital-structure neutral?",
+      "What happens to EV when a company raises debt to buy back shares?"
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "ib-comps-vs-precedents",
+    "title": "Comparable companies vs precedent transactions",
+    "difficulty": "medium",
+    "tags": [
+      "valuation"
+    ],
+    "statement": "Compare trading comps and precedent transactions: how each is built, why precedents usually imply higher valuations, and when each is the more relevant reference.",
+    "hints": [
+      "Control premium.",
+      "Time sensitivity of precedents."
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "ib-lbo-basics",
+    "title": "LBO fundamentals",
+    "difficulty": "medium",
+    "tags": [
+      "lbo"
+    ],
+    "statement": "Explain how a leveraged buyout generates returns, what makes a company a good LBO candidate, and how you would sanity-check an IRR target from a simple sources-and-uses.",
+    "hints": [
+      "Debt paydown, EBITDA growth, multiple expansion.",
+      "Ask for a rough IRR on 2x MOIC over 5 years."
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "ib-accretion-dilution",
+    "title": "Accretion / dilution in an acquisition",
+    "difficulty": "medium",
+    "tags": [
+      "m&a"
+    ],
+    "statement": "An acquirer with a P/E of 20 buys a target with a P/E of 15 in an all-stock deal. Is the deal accretive or dilutive to EPS, and why? What changes if it is financed with debt at 5% interest and a 25% tax rate?",
+    "hints": [
+      "Compare the acquirer's cost of equity (1/PE) with the after-tax cost of debt."
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "ib-wacc",
+    "title": "Building WACC",
+    "difficulty": "medium",
+    "tags": [
+      "valuation"
+    ],
+    "statement": "Explain each component of the weighted average cost of capital, how you estimate cost of equity, and how you would relever a peer beta for a company with a different capital structure.",
+    "hints": [
+      "CAPM.",
+      "Hamada equation for relevering beta."
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "ib-working-capital",
+    "title": "Working capital and cash flow",
+    "difficulty": "easy",
+    "tags": [
+      "accounting"
+    ],
+    "statement": "What is net working capital, why does an increase in it reduce free cash flow, and what are two ways a company can improve its cash conversion without growing revenue?",
+    "hints": [
+      "Days sales outstanding, days payable outstanding."
+    ],
+    "track": "ib"
+  },
+  {
+    "id": "quant-birthday-problem",
+    "title": "Birthday problem",
+    "difficulty": "easy",
+    "tags": [
+      "probability"
+    ],
+    "statement": "How many people need to be in a room for there to be at least a 50% chance that two of them share a birthday? Reason about it aloud before giving a number.",
+    "hints": [
+      "Compute the probability that all birthdays are distinct."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-egg-drop",
+    "title": "Egg drop",
+    "difficulty": "medium",
+    "tags": [
+      "optimization",
+      "dynamic-programming"
+    ],
+    "statement": "You have two identical eggs and a 100-floor building. Find the strategy that minimizes the worst-case number of drops needed to determine the highest floor from which an egg can be dropped without breaking.",
+    "hints": [
+      "Why does going up in fixed steps of 10 not give the optimum?",
+      "Decreasing step sizes: n + (n-1) + ... + 1 >= 100."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-fermi-piano-tuners",
+    "title": "Fermi estimate: piano tuners",
+    "difficulty": "easy",
+    "tags": [
+      "estimation"
+    ],
+    "statement": "Estimate the number of piano tuners in a city like Chicago. State every assumption.",
+    "hints": [
+      "Households, pianos per household, tunings per year, tunings a tuner does per year."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-bayes",
+    "title": "Bayes' theorem",
+    "difficulty": "easy",
+    "tags": [
+      "probability"
+    ],
+    "statement": "Explain Bayes' theorem and work through an example in risk assessment: a test with 99% sensitivity and 95% specificity for a condition with 1% prevalence. What is the probability that a positive result is a true positive?",
+    "hints": [
+      "Base rate matters more than test accuracy here."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-clt",
+    "title": "Central limit theorem",
+    "difficulty": "easy",
+    "tags": [
+      "statistics"
+    ],
+    "statement": "State the central limit theorem, explain why it matters in finance, and give one situation where relying on it would be a mistake.",
+    "hints": [
+      "Heavy tails and dependence."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-expected-value-variance",
+    "title": "Expected value and variance",
+    "difficulty": "easy",
+    "tags": [
+      "probability"
+    ],
+    "statement": "How do you compute the expected value and variance of a discrete random variable? Explain their significance in a financial context, then compute both for a bet that pays +3 with probability 0.4 and -2 with probability 0.6.",
+    "hints": [
+      "Var(X) = E[X^2] - E[X]^2."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-arbitrage",
+    "title": "Arbitrage",
+    "difficulty": "easy",
+    "tags": [
+      "markets"
+    ],
+    "statement": "What is arbitrage, why does it matter for how markets price assets, and can you give an example of an apparent arbitrage that is not actually risk-free?",
+    "hints": [
+      "Put-call parity as a clean example.",
+      "Convergence trades and funding risk."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-coin-streaks",
+    "title": "Expected flips for two heads in a row",
+    "difficulty": "medium",
+    "tags": [
+      "probability",
+      "markov"
+    ],
+    "statement": "What is the expected number of fair coin flips until you see two heads in a row? Set up the recurrence and solve it.",
+    "hints": [
+      "Condition on the first flip; use states for 'no progress' and 'one head'."
+    ],
+    "track": "quant"
+  },
+  {
+    "id": "quant-random-walk",
+    "title": "Random walk hitting probability",
+    "difficulty": "medium",
+    "tags": [
+      "probability",
+      "random-walk"
+    ],
+    "statement": "A symmetric random walk starts at 0 and stops at +a or -b. What is the probability it reaches +a first? What is the expected number of steps?",
+    "hints": [
+      "Harmonic functions; the answer is linear in the start point."
+    ],
+    "track": "quant"
+  }
+]
