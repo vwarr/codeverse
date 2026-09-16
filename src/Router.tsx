@@ -1,21 +1,12 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import CodeEditor from './components/CodeEditor';
-import Banking from './pages/Banking';
+import { FeedbackPage } from './pages/Feedback.page';
 import { HomePage } from './pages/Home.page';
+import { InterviewPage } from './pages/Interview.page';
 
 const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <HomePage />,
-  },
-  {
-    path: '/editor', // New route for the code editor
-    element: <CodeEditor />,
-  },
-  {
-    path: '/banking', // New route for the code editor
-    element: <Banking />,
-  },
+  { path: '/', element: <HomePage /> },
+  { path: '/interview', element: <InterviewPage /> },
+  { path: '/feedback', element: <FeedbackPage /> },
 ]);
 
 export function Router() {
