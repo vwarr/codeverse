@@ -1,5 +1,5 @@
 import { Badge, Group, Text } from '@mantine/core';
-import { InterviewState, STATUS_LABEL } from '../state/interview';
+import { InterviewState, MicState, STATUS_LABEL } from '../state/interview';
 
 const COLOR: Record<InterviewState['status'], string> = {
   idle: 'gray',
@@ -13,12 +13,22 @@ const COLOR: Record<InterviewState['status'], string> = {
   error: 'red',
 };
 
+const MIC_LABEL: Record<MicState, string | null> = {
+  off: null,
+  requesting: 'asking for the microphone…',
+  on: null,
+  denied: 'microphone blocked',
+  unsupported: 'no microphone support',
+};
+
 export function StatusBadge({
   status,
   connected,
+  mic,
 }: {
   status: InterviewState['status'];
   connected: boolean;
+  mic: MicState;
 }) {
   return (
     <Group gap="xs">
@@ -28,6 +38,11 @@ export function StatusBadge({
       {!connected && (
         <Text size="xs" c="red">
           backend offline
+        </Text>
+      )}
+      {MIC_LABEL[mic] && (
+        <Text size="xs" c={mic === 'requesting' ? 'dimmed' : 'red'}>
+          {MIC_LABEL[mic]}
         </Text>
       )}
     </Group>

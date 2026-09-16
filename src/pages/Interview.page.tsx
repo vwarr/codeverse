@@ -58,7 +58,7 @@ export function InterviewPage() {
             codeverse
           </Title>
         </Group>
-        <StatusBadge status={status} connected={state.connected} />
+        <StatusBadge status={status} connected={state.connected} mic={state.mic} />
         <Group gap="md">
           <Switch
             label="Dark"
