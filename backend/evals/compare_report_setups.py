@@ -48,7 +48,7 @@ from codeverse.interview.feedback import (
     TwoStageFeedbackGenerator,
 )
 from codeverse.problems.bank import get_bank
-from codeverse.web.service import is_rate_limited
+from codeverse.web.service import is_transient
 
 LITE, FLASH = "gemini-3.5-flash-lite", "gemini-3.8-flash"
 FORBIDDEN = {"gemini-3.6-flash"}  # production's report model: never spend its quota here
@@ -126,9 +126,9 @@ class BudgetedClient:
                 if is_daily_quota(exc):
                     self.stopped = f"per-day quota on {model}: {_quota_id(exc)}"
                     raise Stop(self.stopped) from exc
-                if is_rate_limited(exc) and attempt < 2:
+                if is_transient(exc) and attempt < 2:  # 429 per minute or 503; retries count
                     print(
-                        f"  {model}: 429 ({_quota_id(exc)}), retrying in {MINUTE_RETRY_DELAY}s",
+                        f"  {model}: transient ({_quota_id(exc)}), retrying in {MINUTE_RETRY_DELAY}s",
                         file=sys.stderr,
                     )
                     await asyncio.sleep(MINUTE_RETRY_DELAY)
