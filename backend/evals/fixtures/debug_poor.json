@@ -1,0 +1,49 @@
+{
+  "name": "debug-poor",
+  "track": "debug",
+  "problem_id": "shopping-cart-leak",
+  "description": "No reproduction, random edits to unrelated code, several changes at once, never finds the cause, tests still fail, no root cause explanation.",
+  "expected": {
+    "overall": [1, 2],
+    "dimensions": {
+      "Communication": [1, 2],
+      "Reproduction and evidence": [1, 2],
+      "Hypothesis-driven process": [1, 2],
+      "Root cause and fix quality": [1, 2],
+      "Verification and prevention": [1, 2]
+    },
+    "final_tests": "fail"
+  },
+  "code": "\"\"\"Shopping cart for the checkout service.\n\nA Cart holds line items for one customer. Prices are in cents to avoid float rounding.\n\"\"\"\n\nfrom dataclasses import dataclass\n\n\n@dataclass\nclass LineItem:\n    sku: str\n    unit_price_cents: int\n    quantity: int = 1\n\n    @property\n    def subtotal_cents(self) -> int:\n        return self.unit_price_cents * self.quantity\n\n\nclass Cart:\n    BULK_THRESHOLD = 5\n    BULK_DISCOUNT = 0.10\n\n    def __init__(self, customer_id, items=[]):\n        self.customer_id = customer_id\n        self.items = items\n\n    def add(self, sku, unit_price_cents, quantity=1):\n        if quantity <= 0:\n            raise ValueError(\"quantity must be positive\")\n        item = LineItem(sku, unit_price_cents, quantity)\n        self.items.append(item)\n        return item\n\n    def remove(self, sku):\n        self.items = [i for i in self.items if i.sku != sku]\n\n    def item_count(self):\n        return len(self.items)\n\n    def total_cents(self):\n        total = 0\n        for item in self.items:\n            line = item.subtotal_cents\n            if item.quantity >= self.BULK_THRESHOLD:\n                line = round(line * (1 - self.BULK_DISCOUNT))\n            total += line\n        return total\n",
+  "transcript": [
+    {"role": "interviewer", "t": 3, "text": "Hi, I'm Sam. Customers are reporting items in their carts that they never added, and it only seems to happen after the server has been up a while. The report and the cart module are on your screen, and you can run the tests with the Run tests button."},
+    {"role": "candidate", "t": 25, "text": "Okay."},
+    {"role": "interviewer", "t": 60, "text": "How are you planning to start?"},
+    {"role": "candidate", "t": 85, "text": "I'll just look at the code and fix it."},
+    {"role": "candidate", "t": 260, "text": "I think the problem is in add. The merging thing looks weird, so I removed it. Now it always makes a new item."},
+    {"role": "interviewer", "t": 272, "text": "What makes you think the merging causes items to show up in another customer's cart?"},
+    {"role": "candidate", "t": 295, "text": "It changes the quantity of an existing item, so maybe that's it."},
+    {"role": "interviewer", "t": 305, "text": "How would you check that?"},
+    {"role": "candidate", "t": 330, "text": "I don't know. I also changed the bulk threshold to five because ten seemed high, and item count to use len."},
+    {"role": "interviewer", "t": 345, "text": "That's several changes at once. Could you run the tests to see where you stand?"},
+    {"role": "candidate", "t": 365, "text": "Okay, running."},
+    {"role": "interviewer", "t": 380, "text": "The run is back: only one of eight passed. The two-customer test, the new cart test and the seeding test fail as before, and now merging same SKUs, the totals, the bulk discount and remove also fail."},
+    {"role": "candidate", "t": 420, "text": "Hmm. That's worse. I don't really get why."},
+    {"role": "interviewer", "t": 430, "text": "Let's slow down. Pick one failing test and tell me what it says."},
+    {"role": "candidate", "t": 470, "text": "Bob's cart has alice's items. Maybe the customer ID is wrong? Like the cart uses the wrong customer."},
+    {"role": "interviewer", "t": 480, "text": "How could you test that idea?"},
+    {"role": "candidate", "t": 520, "text": "I'm not sure. Can you just tell me where the bug is?"},
+    {"role": "interviewer", "t": 528, "text": "That's for you to find. What does the evidence tell you so far?"},
+    {"role": "candidate", "t": 560, "text": "That carts have other people's stuff. I don't know why."},
+    {"role": "interviewer", "t": 575, "text": "Try creating two carts in a row and adding to only one of them. What does the other one contain?"},
+    {"role": "candidate", "t": 640, "text": "I don't know how to check that. Maybe there's a global somewhere? I don't see one."},
+    {"role": "candidate", "t": 700, "text": "I think it's maybe a server problem, not the code. Like caching."},
+    {"role": "interviewer", "t": 712, "text": "If it were caching, what in this module would you expect to see?"},
+    {"role": "candidate", "t": 740, "text": "I don't know. I think I'm out of ideas."},
+    {"role": "interviewer", "t": 750, "text": "Can you explain what you think the root cause is?"},
+    {"role": "candidate", "t": 780, "text": "Probably the server or the merging. I'm not sure."},
+    {"role": "interviewer", "t": 790, "text": "How would you stop this kind of bug happening again?"},
+    {"role": "candidate", "t": 810, "text": "Test more, I guess. I'm done."},
+    {"role": "interviewer", "t": 820, "text": "Thanks for your time. You did run the tests when asked. Next time, reproduce the bug first and change one thing at a time so you can see what each change does. A written report will follow; goodbye."}
+  ]
+}

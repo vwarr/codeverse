@@ -1,0 +1,52 @@
+{
+  "name": "swe-mediocre",
+  "track": "swe",
+  "problem_id": "two-sum",
+  "description": "Brute force first, needs a hint for the hash map, a self-pairing bug fixed late, shaky complexity.",
+  "expected": {
+    "overall": [2, 3],
+    "ideal_overall": 3,
+    "dimensions": {
+      "Communication": [2, 4],
+      "Problem decomposition": [2, 3],
+      "Correctness": [3, 4],
+      "Complexity analysis": [2, 3],
+      "Code quality": [2, 4]
+    },
+    "final_tests": "pass"
+  },
+  "code": "def two_sum(nums, target):\n    d = {}\n    for i in range(len(nums)):\n        x = target - nums[i]\n        if x in d:\n            return [d[x], i]\n        d[nums[i]] = i\n",
+  "transcript": [
+    {"role": "interviewer", "t": 3, "text": "Hi, I'm Sam. Today you'll find two numbers in a list that add up to a target and return their indices. The full statement and examples are on your screen; any clarifying questions?"},
+    {"role": "candidate", "t": 30, "text": "Hi. Um, no, I think it's pretty clear. I just return the two indices."},
+    {"role": "interviewer", "t": 38, "text": "Okay. How would you approach it?"},
+    {"role": "candidate", "t": 70, "text": "So I guess the simple way is to loop over every element, and for each one loop over everything after it, and check if the two add up to the target. If they do, return i and j."},
+    {"role": "interviewer", "t": 78, "text": "What's the complexity of that?"},
+    {"role": "candidate", "t": 101, "text": "It's two loops so, n squared? Space is constant I think."},
+    {"role": "interviewer", "t": 110, "text": "The array can have up to ten thousand elements. Can you do better than n squared?"},
+    {"role": "candidate", "t": 160, "text": "Hmm. Maybe sort it first? Then I could do something like binary search for each element. But then I lose the original indices. I'm not really sure."},
+    {"role": "candidate", "t": 205, "text": "Yeah, I'm kind of stuck on how to keep the indices if I sort."},
+    {"role": "interviewer", "t": 215, "text": "When you reach an element, what information would you need to have seen already?"},
+    {"role": "candidate", "t": 250, "text": "Oh, I'd need to know if target minus the current number appeared before. So I could store numbers in a dictionary, number to index, and look it up. That would be faster."},
+    {"role": "interviewer", "t": 258, "text": "And what's the complexity of that?"},
+    {"role": "candidate", "t": 285, "text": "It's still a loop, and the lookup is, I think, log n? So n log n maybe. Space is n for the dictionary."},
+    {"role": "interviewer", "t": 292, "text": "Okay, go ahead and code it."},
+    {"role": "candidate", "t": 420, "text": "So first I fill the dictionary with every number and its index. Then I loop again and check if target minus the number is in the dictionary, and return both indices."},
+    {"role": "candidate", "t": 480, "text": "I'm done I think."},
+    {"role": "interviewer", "t": 495, "text": "Let's check it. What does your code return for three, two, four with a target of six?"},
+    {"role": "candidate", "t": 540, "text": "At index zero the number is three, six minus three is three, and three is in the dictionary... at index zero. So it returns zero and zero. Oh, that's wrong, it uses the same element twice."},
+    {"role": "interviewer", "t": 550, "text": "How might you fix that?"},
+    {"role": "candidate", "t": 600, "text": "I could check that the index isn't the same. Or, actually, if I only add each number after checking it, it can't match itself. Let me change it to one loop."},
+    {"role": "candidate", "t": 700, "text": "Okay, now it checks first and then adds. Let me run the tests."},
+    {"role": "interviewer", "t": 712, "text": "The tests have come back: all three passed."},
+    {"role": "interviewer", "t": 720, "text": "What's the final time and space complexity?"},
+    {"role": "candidate", "t": 748, "text": "Time is, I think, n log n because of the dictionary lookups, and space is O of n."},
+    {"role": "interviewer", "t": 755, "text": "How long does a lookup in a Python dictionary take on average?"},
+    {"role": "candidate", "t": 775, "text": "Oh, it's a hash table, so constant on average. So O of n overall."},
+    {"role": "interviewer", "t": 782, "text": "What edge cases would you test?"},
+    {"role": "candidate", "t": 805, "text": "Maybe an empty list? Though the problem says at least two. And duplicates, like the three three case."},
+    {"role": "interviewer", "t": 812, "text": "Okay. Anything you'd improve in the code?"},
+    {"role": "candidate", "t": 830, "text": "I could rename d and x to something clearer, but it works. I think I'm finished."},
+    {"role": "interviewer", "t": 845, "text": "Thanks for working through this. You recovered well once you spotted the self-pairing bug. Next time, think about hash map lookup costs before giving the complexity. A written report will follow; goodbye."}
+  ]
+}

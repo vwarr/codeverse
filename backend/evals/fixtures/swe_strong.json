@@ -1,0 +1,48 @@
+{
+  "name": "swe-strong",
+  "track": "swe",
+  "problem_id": "two-sum",
+  "description": "Clarifies, gives the one-pass hash map plan with complexity, clean code, tests pass, edge cases covered.",
+  "expected": {
+    "overall": [4, 5],
+    "dimensions": {
+      "Communication": [4, 5],
+      "Problem decomposition": [4, 5],
+      "Correctness": [4, 5],
+      "Complexity analysis": [4, 5],
+      "Code quality": [4, 5]
+    },
+    "final_tests": "pass"
+  },
+  "code": "def two_sum(nums, target):\n    \"\"\"Return indices of the two numbers in nums that add up to target.\"\"\"\n    seen = {}  # value -> index of an earlier element\n    for i, num in enumerate(nums):\n        complement = target - num\n        if complement in seen:\n            return [seen[complement], i]\n        seen[num] = i\n    return []  # unreachable: the problem guarantees exactly one answer\n",
+  "transcript": [
+    {"role": "interviewer", "t": 2, "text": "Hi, I'm Sam, thanks for joining. Today's problem: you get a list of integers and a target, and you need to return the indices of the two numbers that add up to the target. The full statement and examples are on your screen, so feel free to ask any clarifying questions."},
+    {"role": "candidate", "t": 21, "text": "Hi Sam, thanks. A few questions first. Can the array contain negative numbers and duplicates? And is there always exactly one valid pair, or do I need to handle the case where there's no answer?"},
+    {"role": "interviewer", "t": 34, "text": "Yes, values can be negative and duplicates can appear. The problem guarantees exactly one valid answer, and you can't use the same element twice."},
+    {"role": "candidate", "t": 52, "text": "Okay, and the order of the two indices in the output doesn't matter, right? The statement says any order. And the length is up to ten to the four, so a quadratic solution would be about a hundred million pair checks, which is too slow in Python if we can avoid it."},
+    {"role": "interviewer", "t": 63, "text": "Right, any order is fine. What are you thinking for an approach?"},
+    {"role": "candidate", "t": 95, "text": "The brute force is two nested loops checking every pair, that's O of n squared time and O of one space. We can do better. For each number x, I need to know whether target minus x has already appeared, and at which index. So I'd keep a hash map from value to index as I walk the array once."},
+    {"role": "candidate", "t": 128, "text": "At each index i, I compute the complement, target minus nums of i. If the complement is in the map, I return the stored index and i. Otherwise I put nums of i into the map with index i. Checking before inserting is what stops me from using the same element twice, for example target six with a single three."},
+    {"role": "interviewer", "t": 140, "text": "What about duplicates, say three and three with a target of six?"},
+    {"role": "candidate", "t": 162, "text": "That works too. At index zero the map is empty, so I just store three mapped to zero. At index one the complement is three, it's in the map, so I return zero and one. If a value repeats and isn't part of the answer, overwriting its index is harmless because any earlier index would also work."},
+    {"role": "interviewer", "t": 171, "text": "And the complexity?"},
+    {"role": "candidate", "t": 190, "text": "One pass, and each dictionary lookup and insert is O of one on average, so O of n time. The map can hold up to n entries in the worst case, so O of n space. That's the trade-off versus brute force: we spend linear memory to save a factor of n in time."},
+    {"role": "interviewer", "t": 198, "text": "Sounds good. Go ahead and code it."},
+    {"role": "candidate", "t": 230, "text": "I'll call the dictionary seen, mapping value to index. Then enumerate over nums so I get both the index and the value."},
+    {"role": "candidate", "t": 310, "text": "Compute complement as target minus num. If complement in seen, return seen of complement and i. Then set seen of num equal to i after the check, so I never pair an element with itself."},
+    {"role": "candidate", "t": 365, "text": "The problem guarantees an answer, so the final return is unreachable, but I'll return an empty list rather than None so the function always returns a list. I've added a short docstring too. I think that's it, could you take a look?"},
+    {"role": "interviewer", "t": 382, "text": "I've looked at your code. Before running anything, can you walk me through the first example by hand?"},
+    {"role": "candidate", "t": 410, "text": "Sure. nums is two, seven, eleven, fifteen and target nine. At i zero, num is two, complement is seven, seen is empty, so I store two mapped to zero. At i one, num is seven, complement is two, and two is in seen at index zero, so I return zero and one. That matches the expected output."},
+    {"role": "interviewer", "t": 418, "text": "Good. What edge cases would you test?"},
+    {"role": "candidate", "t": 450, "text": "The minimum length of two, like three and three with target six, which also checks duplicates. Negative numbers, like minus three and four and three with target zero, which should return zero and two. And an answer at the very end of the array, to make sure the single pass reaches it. Let me run the tests."},
+    {"role": "interviewer", "t": 470, "text": "The test run is back: all three tests passed."},
+    {"role": "candidate", "t": 486, "text": "Great. I also traced the negative case in my head, minus three is stored at zero, four is stored at one, then three finds minus three, so it returns zero and two."},
+    {"role": "interviewer", "t": 495, "text": "Nice. What's the final time and space complexity, and is there anything you'd change?"},
+    {"role": "candidate", "t": 522, "text": "O of n time and O of n space. I'd keep it as is. If memory were really tight, I could sort index value pairs and use two pointers, which is O of n log n time and still O of n space for the pairs, so the hash map is the better trade-off here."},
+    {"role": "interviewer", "t": 532, "text": "Follow-up: what if the input were already sorted?"},
+    {"role": "candidate", "t": 560, "text": "Then two pointers, one at each end. If the sum is too small, move the left pointer right, if it's too big, move the right pointer left. That's O of n time and O of one extra space, because sorted order tells us which way to move."},
+    {"role": "interviewer", "t": 571, "text": "Exactly. Anything you'd want to ask before we wrap up?"},
+    {"role": "candidate", "t": 584, "text": "No, I think I'm done. Thanks, that was fun."},
+    {"role": "interviewer", "t": 600, "text": "Thanks for your time today. You clarified the constraints up front and gave a well-justified one-pass solution. One thing to keep doing is tracing edge cases before you run the tests. A written report will follow. Goodbye."}
+  ]
+}

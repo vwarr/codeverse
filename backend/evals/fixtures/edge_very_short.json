@@ -1,0 +1,26 @@
+{
+  "name": "edge-very-short",
+  "track": "swe",
+  "problem_id": "two-sum",
+  "description": "Three candidate turns: a promising idea, then the candidate leaves. No code beyond the starter.",
+  "expected": {
+    "overall": [1, 2],
+    "dimensions": {
+      "Correctness": [1, 1],
+      "Code quality": [1, 2],
+      "Complexity analysis": [1, 2]
+    },
+    "max_dimension": 2,
+    "final_tests": "fail"
+  },
+  "code": "def two_sum(nums, target):\n    pass\n",
+  "transcript": [
+    {"role": "interviewer", "t": 2, "text": "Hi, I'm Sam. Today you'll find two numbers in a list that add up to a target and return their indices. The details are on your screen; any clarifying questions?"},
+    {"role": "candidate", "t": 20, "text": "Hi. Can the numbers be negative?"},
+    {"role": "interviewer", "t": 27, "text": "Yes, they can be negative, and there's always exactly one answer."},
+    {"role": "candidate", "t": 55, "text": "Okay. I think I'd use a hash map from value to index so I only go through the list once."},
+    {"role": "interviewer", "t": 64, "text": "Sounds promising. Can you walk me through it and its complexity?"},
+    {"role": "candidate", "t": 80, "text": "Sorry, something came up at work, I have to go. Can we stop here?"},
+    {"role": "interviewer", "t": 88, "text": "Of course. Thanks for joining; you started well by checking the input range and suggesting a one-pass idea. Next time, try to walk through the full plan and its complexity. A written report will follow; goodbye."}
+  ]
+}

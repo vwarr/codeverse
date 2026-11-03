@@ -1,0 +1,44 @@
+{
+  "name": "debug-strong",
+  "track": "debug",
+  "problem_id": "shopping-cart-leak",
+  "description": "Reproduces first, one hypothesis at a time, root-cause fix (None default plus copy), verifies, proposes prevention.",
+  "expected": {
+    "overall": [4, 5],
+    "dimensions": {
+      "Communication": [4, 5],
+      "Reproduction and evidence": [4, 5],
+      "Hypothesis-driven process": [4, 5],
+      "Root cause and fix quality": [4, 5],
+      "Verification and prevention": [4, 5]
+    },
+    "final_tests": "pass"
+  },
+  "code": "\"\"\"Shopping cart for the checkout service.\n\nA Cart holds line items for one customer. Prices are in cents to avoid float rounding.\n\"\"\"\n\nfrom dataclasses import dataclass\n\n\n@dataclass\nclass LineItem:\n    sku: str\n    unit_price_cents: int\n    quantity: int = 1\n\n    @property\n    def subtotal_cents(self) -> int:\n        return self.unit_price_cents * self.quantity\n\n\nclass Cart:\n    BULK_THRESHOLD = 10  # 10 or more units of one SKU get the bulk discount\n    BULK_DISCOUNT = 0.10\n\n    def __init__(self, customer_id, items=None):\n        self.customer_id = customer_id\n        # A new list per cart: a mutable default would be shared by every cart, and keeping the\n        # caller's list would let the caller and the cart change each other.\n        self.items = list(items) if items is not None else []\n\n    def add(self, sku, unit_price_cents, quantity=1):\n        if quantity <= 0:\n            raise ValueError(\"quantity must be positive\")\n        for item in self.items:\n            if item.sku == sku:\n                item.quantity += quantity\n                return item\n        item = LineItem(sku, unit_price_cents, quantity)\n        self.items.append(item)\n        return item\n\n    def remove(self, sku):\n        self.items = [i for i in self.items if i.sku != sku]\n\n    def item_count(self):\n        return sum(i.quantity for i in self.items)\n\n    def total_cents(self):\n        total = 0\n        for item in self.items:\n            line = item.subtotal_cents\n            if item.quantity >= self.BULK_THRESHOLD:\n                line = round(line * (1 - self.BULK_DISCOUNT))\n            total += line\n        return total\n",
+  "transcript": [
+    {"role": "interviewer", "t": 3, "text": "Hi, I'm Sam. Support has tickets from customers finding items in their carts they never added, and it only shows up after the server has been running a while. The report and the cart module are on your screen, and you can run the team's tests with the Run tests button."},
+    {"role": "candidate", "t": 28, "text": "Thanks. So the symptom is one customer's cart containing another customer's items, and it gets worse with uptime but resets on deploy. That smells like state that lives at the process level rather than per request. Is each cart created fresh per session, or are carts cached somewhere?"},
+    {"role": "interviewer", "t": 42, "text": "As far as I know a new Cart object is created for each customer session; nothing caches them on purpose."},
+    {"role": "candidate", "t": 60, "text": "Okay. Before I read too much into the code, I'll run the tests to see what actually fails."},
+    {"role": "interviewer", "t": 75, "text": "The run is back: five of eight passed. The two-customer test fails saying bob's new cart already contains alice's items, a new cart isn't empty after other carts were used, and the seeding test says adding to the cart modified the caller's list."},
+    {"role": "candidate", "t": 105, "text": "Good, that reproduces the ticket. All three failures are about carts sharing a list, and the total and discount tests pass, so I don't think the pricing logic is involved. My hypothesis is that every Cart ends up pointing at the same items list object."},
+    {"role": "candidate", "t": 130, "text": "To confirm it, I want to know where items comes from. In the constructor, items has a default of an empty list, and self dot items is just assigned to it. In Python a default value is evaluated once, when the function is defined, so every Cart created without items gets the very same list."},
+    {"role": "interviewer", "t": 142, "text": "What makes you sure that's the cause, rather than something in add?"},
+    {"role": "candidate", "t": 170, "text": "Add only mutates self dot items in place with append, which is correct if each cart has its own list. To check, I'd create two carts, add to one, and test whether the other's items is the same object with an identity check. The failing test does basically that: alice adds an apple and bob's count is one."},
+    {"role": "candidate", "t": 200, "text": "It also explains the uptime part. The shared list lives as long as the process, so it accumulates items until a deploy restarts the server, and then it starts empty again."},
+    {"role": "interviewer", "t": 210, "text": "What about the seeding test?"},
+    {"role": "candidate", "t": 240, "text": "That's a related but separate problem. When a caller passes their own list, the cart stores that exact list, so adding to the cart mutates the caller's list. Even with a fixed default, the aliasing would remain. So the fix is to default items to None and always build a new list, using list of items when one is passed."},
+    {"role": "candidate", "t": 300, "text": "I've changed the signature to items equals None, and the body to list of items if items is not None else an empty list. I added a short comment explaining why. Remove already rebinds to a new list, so it's fine. Running the tests again."},
+    {"role": "interviewer", "t": 318, "text": "The new run is back: all eight tests pass."},
+    {"role": "candidate", "t": 340, "text": "Great. I want to make sure I didn't change behaviour for callers that seed a cart: they still get their items, just in a copy, and the public API of Cart is the same, so the constraint holds."},
+    {"role": "interviewer", "t": 350, "text": "Can you explain the root cause in a sentence or two?"},
+    {"role": "candidate", "t": 385, "text": "The constructor used a mutable default argument, so one list created at import time was shared by every cart made without items, and items leaked between customers for as long as the process lived. A second aliasing issue meant a cart also shared the list a caller passed in; copying fixes both."},
+    {"role": "interviewer", "t": 395, "text": "How would you stop this class of bug coming back?"},
+    {"role": "candidate", "t": 430, "text": "Turn on a linter rule for it, ruff and flake8-bugbear both flag mutable default arguments as B006, and fail CI on it. Keep these regression tests, especially the two-customers test. And in code review, treat a default of a list or dict as a red flag."},
+    {"role": "interviewer", "t": 440, "text": "Is everything in the report accounted for now?"},
+    {"role": "candidate", "t": 470, "text": "I think so. Items appearing from someone else's order is the shared list, it only happens after uptime because the list persists, and right after a deploy it's a fresh process so carts look fine. All of it is explained by the same cause."},
+    {"role": "interviewer", "t": 480, "text": "Okay. Anything else you'd check before shipping?"},
+    {"role": "candidate", "t": 510, "text": "I'd grep the rest of the service for other mutable defaults, and maybe add a quick test that constructs many carts concurrently. Then ship it with a note to support that existing sessions clear on the next deploy."},
+    {"role": "interviewer", "t": 520, "text": "Thanks, that was thorough. You reproduced the bug before touching the code and fixed the root cause including the aliasing case. To push further, try confirming hypotheses with a tiny experiment in the editor too. A written report will follow; goodbye."}
+  ]
+}

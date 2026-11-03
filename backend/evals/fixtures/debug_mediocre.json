@@ -1,0 +1,48 @@
+{
+  "name": "debug-mediocre",
+  "track": "debug",
+  "problem_id": "shopping-cart-leak",
+  "description": "Reads code before reproducing, a wrong first guess, needs a hint for default arguments, fixes the default but leaves the aliasing, vague prevention.",
+  "expected": {
+    "overall": [2, 3],
+    "ideal_overall": 3,
+    "dimensions": {
+      "Communication": [2, 4],
+      "Reproduction and evidence": [2, 4],
+      "Hypothesis-driven process": [2, 3],
+      "Root cause and fix quality": [2, 3],
+      "Verification and prevention": [2, 3]
+    },
+    "final_tests": "fail"
+  },
+  "code": "\"\"\"Shopping cart for the checkout service.\n\nA Cart holds line items for one customer. Prices are in cents to avoid float rounding.\n\"\"\"\n\nfrom dataclasses import dataclass\n\n\n@dataclass\nclass LineItem:\n    sku: str\n    unit_price_cents: int\n    quantity: int = 1\n\n    @property\n    def subtotal_cents(self) -> int:\n        return self.unit_price_cents * self.quantity\n\n\nclass Cart:\n    BULK_THRESHOLD = 10  # 10 or more units of one SKU get the bulk discount\n    BULK_DISCOUNT = 0.10\n\n    def __init__(self, customer_id, items=None):\n        self.customer_id = customer_id\n        if items is None:\n            items = []\n        self.items = items\n\n    def add(self, sku, unit_price_cents, quantity=1):\n        if quantity <= 0:\n            raise ValueError(\"quantity must be positive\")\n        for item in self.items:\n            if item.sku == sku:\n                item.quantity += quantity\n                return item\n        item = LineItem(sku, unit_price_cents, quantity)\n        self.items.append(item)\n        return item\n\n    def remove(self, sku):\n        self.items = [i for i in self.items if i.sku != sku]\n\n    def item_count(self):\n        return sum(i.quantity for i in self.items)\n\n    def total_cents(self):\n        total = 0\n        for item in self.items:\n            line = item.subtotal_cents\n            if item.quantity >= self.BULK_THRESHOLD:\n                line = round(line * (1 - self.BULK_DISCOUNT))\n            total += line\n        return total\n",
+  "transcript": [
+    {"role": "interviewer", "t": 3, "text": "Hi, I'm Sam. We've got tickets from customers seeing items in their cart that they never added, and it seems to happen only after the server has been up a while. The report and the cart module are on your screen, and you can run the tests with the Run tests button."},
+    {"role": "candidate", "t": 30, "text": "Okay, so people see other people's items. Let me read through the code first."},
+    {"role": "candidate", "t": 150, "text": "I'm looking at add. When the same SKU is already there, it increases the quantity on the existing item. Maybe the line items are shared between carts somehow, like the LineItem objects get reused?"},
+    {"role": "interviewer", "t": 162, "text": "What makes you think that?"},
+    {"role": "candidate", "t": 190, "text": "Just that it's mutating item dot quantity in place. If two carts had the same LineItem, both would change. I could make add create a new LineItem every time."},
+    {"role": "interviewer", "t": 200, "text": "How would you confirm that before changing it?"},
+    {"role": "candidate", "t": 225, "text": "I guess I should run the tests first."},
+    {"role": "interviewer", "t": 245, "text": "The run is back: five of eight passed. The failures say bob's new cart already contains alice's items, a new cart isn't empty after other carts were used, and adding to the cart modified the list the caller passed in."},
+    {"role": "candidate", "t": 280, "text": "Hmm, so bob's new cart already has alice's stuff. Bob never added anything, so it's not about add merging lines. It's like the list itself is shared. But each cart sets self dot items, so I'm not sure how they share it."},
+    {"role": "candidate", "t": 340, "text": "I'm a bit stuck. Is it something with the class variables? BULK_THRESHOLD is on the class."},
+    {"role": "interviewer", "t": 355, "text": "When is the default value of a function argument evaluated in Python?"},
+    {"role": "candidate", "t": 385, "text": "Oh. When the function is defined, once. So the empty list default is the same list for every cart. That's it."},
+    {"role": "candidate", "t": 440, "text": "So I'll change the default to None and inside I'll say if items is None, items is an empty list. That way each cart gets a new list."},
+    {"role": "candidate", "t": 470, "text": "Running the tests."},
+    {"role": "interviewer", "t": 485, "text": "The run is back: seven of eight passed. The seeding test still fails: adding to the cart modified the list the caller passed in."},
+    {"role": "candidate", "t": 520, "text": "Okay, that one is when you pass in your own list. I think that's kind of expected, the caller gave us the list. The main bug from the ticket is fixed, the two customers test passes now."},
+    {"role": "interviewer", "t": 530, "text": "Is everything in the report accounted for now?"},
+    {"role": "candidate", "t": 560, "text": "Yeah, the report is about customers seeing other people's items, and that was the default list, so I think that's done. The seeding test might be a bit strict."},
+    {"role": "interviewer", "t": 570, "text": "Can you explain the root cause in a sentence or two?"},
+    {"role": "candidate", "t": 600, "text": "The default empty list is created once, so all the carts share it and items from one customer show up in another. Restarting the server makes a new list, so after a deploy it looks fine."},
+    {"role": "interviewer", "t": 610, "text": "How would you stop this kind of bug from coming back?"},
+    {"role": "candidate", "t": 635, "text": "Be more careful with default arguments, I guess. And maybe more tests."},
+    {"role": "interviewer", "t": 642, "text": "Anything specific, like a tool or a check?"},
+    {"role": "candidate", "t": 665, "text": "Maybe a code review checklist? I'm not sure about tools."},
+    {"role": "interviewer", "t": 675, "text": "Okay. Anything else before we wrap up?"},
+    {"role": "candidate", "t": 690, "text": "No, I think I'm done."},
+    {"role": "interviewer", "t": 700, "text": "Thanks for working through it. Once you ran the tests you read the failure well and fixed the shared default. Next time, run the tests before forming a theory and look closely at every failing test. A written report will follow; goodbye."}
+  ]
+}
