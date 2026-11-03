@@ -23,7 +23,6 @@ import type {
   StartAck,
   StartRequest,
   TestRun,
-  TranscriptTurn,
 } from '../types';
 import type {
   LiveConnection,
@@ -32,9 +31,9 @@ import type {
   LiveMessage,
   ToolResponse,
 } from './connector';
+import { TranscriptBuilder } from './transcript';
 
 type Handler = (...args: any[]) => void;
-type Role = TranscriptTurn['role'];
 
 const AUDIO_IN_MIME = 'audio/pcm;rate=16000';
 const MAX_RECONNECTS = 20;
@@ -104,8 +103,8 @@ export class LiveInterview {
   private startedAt = 0;
   private code = '';
   private language = 'python';
-  private transcript: TranscriptTurn[] = [];
-  private pending: Record<Role, string> = { candidate: '', interviewer: '' };
+  private transcript = new TranscriptBuilder();
+  private published = -1;
   private turns: TurnMetrics[] = [];
   private currentTurn: TurnMetrics | null = null;
   private lastCandidateAt: number | null = null;
@@ -277,6 +276,7 @@ export class LiveInterview {
     }
     this.limitTimer = setTimeout(() => this.beginWrapUp('time_limit'), grant.maxSeconds * 1000);
     this.setState('thinking');
+    this.transcript.openingSent();
     this.sendText(grant.openingInstruction, true);
     return { ok: true, session: this.session };
   }
@@ -289,8 +289,8 @@ export class LiveInterview {
     this.session = null;
     this.state = 'idle';
     this.code = '';
-    this.transcript = [];
-    this.pending = { candidate: '', interviewer: '' };
+    this.transcript = new TranscriptBuilder();
+    this.published = -1;
     this.turns = [];
     this.currentTurn = null;
     this.lastCandidateAt = null;
@@ -434,7 +434,7 @@ export class LiveInterview {
     if (this.session) {
       this.api.endSession(this.session.sessionId);
     }
-    this.flushTranscript();
+    this.publishTranscript(true);
     this.stopTimers();
     this.closeConnection();
     this.endedResolve?.();
@@ -447,7 +447,7 @@ export class LiveInterview {
     }
     const session = this.session;
     this.unwatchPageHide(); // the report request ends the session
-    this.flushTranscript();
+    this.publishTranscript(true);
     this.stopTimers();
     this.closeConnection(); // stop paying for audio before the report call
     const metrics = this.metrics();
@@ -455,7 +455,7 @@ export class LiveInterview {
     this.endedResolve?.();
     const request = {
       sessionId: session.sessionId,
-      transcript: this.transcript,
+      transcript: this.transcript.final(),
       code: session.surface === 'editor' ? this.code : '',
       metrics,
       endReason: reason,
@@ -542,6 +542,9 @@ export class LiveInterview {
     }
     // The Live API ends each connection after about ten minutes (with a GoAway first). Resume the
     // same conversation with the latest handle; the one-use token stays valid for resumption.
+    // A turn in progress does not survive the closed connection.
+    this.transcript.connectionLost(this.now());
+    this.publishTranscript();
     if (this.handle) {
       this.fire('connection', { reconnecting: true });
     }
@@ -566,7 +569,7 @@ export class LiveInterview {
     }
     if (this.state === 'wrapping_up') {
       await this.end();
-    } else if (this.transcript.length || this.pending.candidate || this.pending.interviewer) {
+    } else if (this.transcript.hasContent()) {
       // The interview had started: end it cleanly, keep the transcript and still ask for a report.
       await this.end(limited ? 'quota' : 'connection_lost');
     } else {
@@ -581,39 +584,60 @@ export class LiveInterview {
     if (update?.resumable && update.newHandle) {
       this.handle = update.newHandle;
     }
-    for (const call of msg.toolCall?.functionCalls ?? []) {
+    const calls = msg.toolCall?.functionCalls ?? [];
+    if (calls.length) {
+      this.transcript.toolCall(this.now());
+    }
+    for (const call of calls) {
       this.runTool(call);
     }
     const content = msg.serverContent;
-    if (!content) {
-      return;
+    if (content) {
+      this.onServerContent(content);
     }
+    this.publishTranscript();
+  }
+
+  private onServerContent(content: NonNullable<LiveMessage['serverContent']>) {
     for (const part of content.modelTurn?.parts ?? []) {
       if (part.inlineData?.data) {
         this.onModelAudio(base64ToArrayBuffer(part.inlineData.data));
       }
     }
-    if (content.inputTranscription?.text) {
-      this.lastCandidateAt = this.clock();
-      this.append('candidate', content.inputTranscription.text);
-      if (this.state === 'listening') {
-        this.setState('thinking');
-      }
-    }
     if (content.outputTranscription?.text) {
-      this.append('interviewer', content.outputTranscription.text);
+      this.transcript.output(content.outputTranscription.text, this.now());
+    }
+    if (content.generationComplete) {
+      this.transcript.generationComplete();
     }
     if (content.interrupted) {
-      this.commit('interviewer');
+      this.transcript.interrupted();
       this.currentTurn = null;
       this.fire('interrupted', {});
       if (this.state === 'speaking' || this.state === 'thinking') {
         this.setState('listening');
       }
     }
+    const input = content.inputTranscription;
+    if (input?.text || input?.finished) {
+      const text = input.text ?? '';
+      if (text) {
+        this.lastCandidateAt = this.clock();
+      }
+      // Words after `interrupted` start a new turn; late words of a turn the model already
+      // answered join that turn and do not change the state.
+      const newTurn = this.transcript.input(text, this.now(), !!input.finished);
+      if (newTurn && this.state === 'listening') {
+        this.setState('thinking');
+      }
+    }
     if (content.turnComplete) {
-      this.commit('candidate');
-      this.commit('interviewer');
+      // Audio comes faster than real time, so turnComplete can come before the reply has played.
+      const turn = this.currentTurn;
+      const playedBy = turn
+        ? turn.firstAudioAt - this.startedAt + turn.audioBytes / (2 * 24000)
+        : 0;
+      this.transcript.turnComplete(this.now(), playedBy);
       this.currentTurn = null;
       if (this.state === 'wrapping_up') {
         void this.end();
@@ -624,6 +648,7 @@ export class LiveInterview {
   }
 
   private onModelAudio(chunk: ArrayBuffer) {
+    this.transcript.modelOutput(this.now());
     if (!this.currentTurn) {
       // Response latency: the candidate's last transcribed words -> the first audio byte.
       this.currentTurn = {
@@ -690,39 +715,20 @@ export class LiveInterview {
   }
 
   // ------------------------------------------------------------------ transcript
-  private append(role: Role, fragment: string) {
-    this.pending[role] += fragment;
-    this.fire('transcript_delta', { role, text: fragment });
-  }
-
-  private flushRole(role: Role): TranscriptTurn | null {
-    const text = this.pending[role].trim();
-    this.pending[role] = '';
-    if (!text) {
-      return null;
+  /** Send the ordered transcript to the UI when it changed (`final`: nothing is partial any more). */
+  private publishTranscript(final = false) {
+    if (!final && this.transcript.changes === this.published) {
+      return;
     }
-    const turn = { role, text, t: Math.round(this.now() * 100) / 100 };
-    this.transcript.push(turn);
-    return turn;
-  }
-
-  private commit(role: Role) {
-    const turn = this.flushRole(role);
-    if (turn) {
-      this.fire('transcript_turn', turn);
-    }
-  }
-
-  private flushTranscript() {
-    this.flushRole('candidate');
-    this.flushRole('interviewer');
+    this.published = this.transcript.changes;
+    this.fire('transcript', { turns: final ? this.transcript.final() : this.transcript.view() });
   }
 
   /** For tests and debugging. */
   snapshot() {
     return {
       state: this.state,
-      transcript: [...this.transcript],
+      transcript: this.transcript.final(),
       handle: this.handle,
       lastRun: this.lastRun as RunResult | null,
     };

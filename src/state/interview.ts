@@ -1,5 +1,6 @@
 // Pure reducer for the interview lifecycle. The socket wiring lives in InterviewProvider.
 
+import type { LiveTranscriptTurn } from '../lib/live/transcript';
 import type {
   FeedbackReport,
   RunResult,
@@ -15,7 +16,8 @@ export type MicState = 'off' | 'requesting' | 'on' | 'denied' | 'unsupported';
 export interface InterviewState {
   status: SessionStatus | 'starting';
   session: SessionInfo | null;
-  transcript: TranscriptTurn[];
+  // In order; a line is `partial` while it still takes text.
+  transcript: LiveTranscriptTurn[];
   live: { candidate: string; interviewer: string };
   report: FeedbackReport | null;
   metrics: SessionMetrics | null;
@@ -45,6 +47,8 @@ export type InterviewAction =
   | { type: 'state'; state: SessionStatus; reason?: string }
   | { type: 'transcript_delta'; role: TranscriptTurn['role']; text: string }
   | { type: 'transcript_turn'; turn: TranscriptTurn }
+  // The whole ordered transcript (Gemini Live): late words can change earlier lines.
+  | { type: 'transcript'; turns: LiveTranscriptTurn[] }
   | { type: 'interrupted' }
   | { type: 'feedback'; report: FeedbackReport }
   | { type: 'ended'; metrics: SessionMetrics }
@@ -117,6 +121,8 @@ export function interviewReducer(state: InterviewState, action: InterviewAction)
         transcript: [...state.transcript, action.turn],
         live: { ...state.live, [action.turn.role]: '' },
       };
+    case 'transcript':
+      return { ...state, transcript: action.turns, live: { candidate: '', interviewer: '' } };
     case 'interrupted':
       return { ...state, live: { ...state.live, interviewer: '' } };
     case 'feedback':

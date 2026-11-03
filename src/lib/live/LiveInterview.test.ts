@@ -111,7 +111,7 @@ function setup() {
     'session_state',
     'audio_out',
     'transcript_delta',
-    'transcript_turn',
+    'transcript',
     'interrupted',
     'tool_call',
     'run_result',
@@ -183,7 +183,7 @@ describe('LiveInterview', () => {
     c.msg(audio(9600));
     c.msg({ serverContent: { turnComplete: true } });
 
-    const turns = events.filter(([e]) => e === 'transcript_turn').map(([, d]) => d);
+    const turns = events.filter(([e]) => e === 'transcript').at(-1)![1].turns as any[];
     expect(turns.map((t) => [t.role, t.text])).toEqual([
       ['interviewer', 'Hello there.'],
       ['candidate', 'I would run the tests.'],
@@ -394,5 +394,259 @@ describe('LiveInterview', () => {
     await live.start({ track: 'swe' });
     expect((await live.runTests('x')).ok).toBe(false);
     expect(api.runTests).not.toHaveBeenCalled();
+  });
+});
+
+// Event sequences in the shapes of BidiGenerateContentServerContent
+// (https://aistudio.google.com/api-reference/live): `inputTranscription` is sent independently of
+// the other messages, with no guaranteed ordering; the last `outputTranscription` of a turn comes
+// before `generationComplete` (or `interrupted`), and `turnComplete` follows.
+describe('LiveInterview transcript order', () => {
+  const said = (text: string, finished?: boolean): LiveMessage => ({
+    serverContent: { inputTranscription: finished ? { text, finished } : { text } },
+  });
+  const says = (text: string): LiveMessage => ({
+    serverContent: { outputTranscription: { text } },
+  });
+  const generationComplete: LiveMessage = { serverContent: { generationComplete: true } };
+  const turnComplete: LiveMessage = { serverContent: { turnComplete: true } };
+
+  async function started() {
+    const ctx = setup();
+    await ctx.live.start({ track: 'debug' });
+    const c = ctx.conns[0];
+    const lines = () => {
+      const last = ctx.events.filter(([e]) => e === 'transcript').at(-1);
+      return ((last?.[1].turns ?? []) as { role: string; text: string }[]).map((t) => [
+        t.role[0].toUpperCase(),
+        t.text,
+      ]);
+    };
+    // The opening: the model speaks first, in answer to the hidden opening instruction.
+    const opening = () => {
+      c.msg(audio(480));
+      c.msg(says('Hi, I am '));
+      c.msg(says('your interviewer.'));
+      c.msg(generationComplete);
+      c.msg(turnComplete);
+      ctx.tick(3);
+    };
+    return { ...ctx, c, lines, opening };
+  }
+
+  it('puts the opening first and never shows the hidden instructions', async () => {
+    const { live, c, lines, reports, events } = await started();
+    c.msg(audio(480));
+    c.msg(says('Hi, I am '));
+    // The candidate talks over the greeting without a barge-in.
+    c.msg(said('Hello.'));
+    c.msg(says('your interviewer.'));
+    c.msg(generationComplete);
+    c.msg(turnComplete);
+    expect(lines()).toEqual([
+      ['I', 'Hi, I am your interviewer.'],
+      ['C', 'Hello.'],
+    ]);
+
+    live.emit('end_interview', {});
+    expect(c.texts.map((t) => t.text)).toEqual(['OPEN', 'WRAP']);
+    c.msg(audio(480));
+    c.msg(says('Thanks for your time.'));
+    c.msg(turnComplete);
+    await vi.waitFor(() => expect(events.some(([e]) => e === 'interview_ended')).toBe(true));
+    const texts = reports[0].transcript.map((t) => t.text);
+    expect(texts).toEqual(['Hi, I am your interviewer.', 'Hello.', 'Thanks for your time.']);
+    expect(texts.join(' ')).not.toMatch(/OPEN|WRAP/);
+  });
+
+  it('keeps the candidate before the reply when their words arrive after it started', async () => {
+    const { c, lines, opening, states } = await started();
+    opening();
+    c.msg(said('I think the'));
+    c.msg(audio(4800));
+    c.msg(says('Good'));
+    c.msg(said(' bug is in the loop.'));
+    c.msg(says(' point.'));
+    c.msg(generationComplete);
+    c.msg(said(' Probably off by one.'));
+    c.msg(turnComplete);
+    expect(lines()).toEqual([
+      ['I', 'Hi, I am your interviewer.'],
+      ['C', 'I think the bug is in the loop. Probably off by one.'],
+      ['I', 'Good point.'],
+    ]);
+    expect(states().at(-1)).toBe('listening');
+  });
+
+  it('puts words that arrive only after the reply is complete before the reply', async () => {
+    const { c, lines, opening, tick, states, live } = await started();
+    opening();
+    // The candidate's speech made the model answer; its transcription comes last.
+    c.msg(audio(4800));
+    c.msg(says('Sure, go ahead.'));
+    c.msg(generationComplete);
+    c.msg(turnComplete);
+    tick(0.4);
+    c.msg(said('Can I use '));
+    c.msg(said('a hash map?'));
+    expect(lines()).toEqual([
+      ['I', 'Hi, I am your interviewer.'],
+      ['C', 'Can I use a hash map?'],
+      ['I', 'Sure, go ahead.'],
+    ]);
+    // Late words of an answered turn do not change the state.
+    expect(states().at(-1)).toBe('listening');
+    const t = live.snapshot().transcript.map((x) => x.t);
+    expect([...t].sort((a, b) => a - b)).toEqual(t);
+  });
+
+  it('ends the reply on a barge-in and starts a new candidate turn', async () => {
+    const { c, lines, opening, events } = await started();
+    opening();
+    c.msg(said('What is the complexity?'));
+    c.msg(audio(4800));
+    c.msg(says('It is linear, because the'));
+    c.msg({ serverContent: { interrupted: true, inputTranscription: { text: 'Wait,' } } });
+    expect(events.some(([e]) => e === 'interrupted')).toBe(true);
+    c.msg(turnComplete);
+    c.msg(said(' sorry, I meant space.'));
+    c.msg(audio(4800));
+    c.msg(says('Space is constant.'));
+    c.msg(generationComplete);
+    c.msg(turnComplete);
+    expect(lines()).toEqual([
+      ['I', 'Hi, I am your interviewer.'],
+      ['C', 'What is the complexity?'],
+      ['I', 'It is linear, because the'],
+      ['C', 'Wait, sorry, I meant space.'],
+      ['I', 'Space is constant.'],
+    ]);
+  });
+
+  it('keeps one interviewer line across a tool call in the middle of a turn', async () => {
+    const { live, c, lines, opening } = await started();
+    opening();
+    live.emit('code_update', { code: 'for i in range(n - 1):' });
+    c.msg(said('Can you look at my code?'));
+    c.msg(audio(4800));
+    c.msg(says('Let me look.'));
+    c.msg({ toolCall: { functionCalls: [{ id: 'c1', name: 'get_current_code' }] } });
+    expect(c.toolResponses).toHaveLength(1);
+    // Some sessions end the turn at the tool call and continue after the tool response.
+    c.msg(turnComplete);
+    c.msg(said(' Thanks.'));
+    c.msg(audio(4800));
+    c.msg(says('Your loop'));
+    c.msg(says(' stops one early.'));
+    c.msg(generationComplete);
+    c.msg(turnComplete);
+    expect(lines()).toEqual([
+      ['I', 'Hi, I am your interviewer.'],
+      ['C', 'Can you look at my code? Thanks.'],
+      ['I', 'Let me look. Your loop stops one early.'],
+    ]);
+  });
+
+  it('keeps two quick candidate turns apart and in order', async () => {
+    const { c, lines, opening, tick } = await started();
+    opening();
+    c.msg(said('I will use two pointers.', true));
+    c.msg(audio(2400));
+    c.msg(says('Okay.'));
+    c.msg(generationComplete);
+    c.msg(turnComplete);
+    tick(2);
+    // The second reply starts before the second turn's words arrive.
+    c.msg(audio(2400));
+    c.msg(says('Go on.'));
+    c.msg(said('Then I move'));
+    c.msg(said(' the left one.'));
+    c.msg(generationComplete);
+    c.msg(turnComplete);
+    tick(2);
+    c.msg(said('Done.'));
+    expect(lines()).toEqual([
+      ['I', 'Hi, I am your interviewer.'],
+      ['C', 'I will use two pointers.'],
+      ['I', 'Okay.'],
+      ['C', 'Then I move the left one.'],
+      ['I', 'Go on.'],
+      ['C', 'Done.'],
+    ]);
+  });
+
+  it('waits for the reply to play before late words become a new turn', async () => {
+    const { c, lines, opening, tick } = await started();
+    opening();
+    // Five seconds of audio (24 kHz, 16-bit) arrive at once; turnComplete comes before playback ends.
+    c.msg(audio(5 * 48000));
+    c.msg(says('That is a long answer.'));
+    c.msg(turnComplete);
+    tick(3);
+    c.msg(said('Is it sorted?'));
+    expect(lines().slice(1)).toEqual([
+      ['C', 'Is it sorted?'],
+      ['I', 'That is a long answer.'],
+    ]);
+    tick(4); // past the playback end plus the grace period
+    c.msg(said('Yes.'));
+    expect(lines().slice(1)).toEqual([
+      ['C', 'Is it sorted?'],
+      ['I', 'That is a long answer.'],
+      ['C', 'Yes.'],
+    ]);
+  });
+
+  it('starts a new candidate turn once the grace period after turnComplete is over', async () => {
+    const { c, lines, opening, tick, states } = await started();
+    opening();
+    c.msg(said('First.'));
+    c.msg(audio(2400));
+    c.msg(says('Okay.'));
+    c.msg(turnComplete);
+    tick(1.5);
+    c.msg(said('Second.'));
+    expect(states().at(-1)).toBe('thinking');
+    expect(lines().slice(1)).toEqual([
+      ['C', 'First.'],
+      ['I', 'Okay.'],
+      ['C', 'Second.'],
+    ]);
+  });
+
+  it('sends the ordered transcript, without partial marks, to the report', async () => {
+    const { live, c, reports, events, opening, tick } = await started();
+    opening();
+    c.msg(audio(4800));
+    c.msg(says('Tell me '));
+    c.msg(said('My plan is'));
+    c.msg(says(' more.'));
+    c.msg(generationComplete);
+    c.msg(said(' a heap.'));
+    c.msg(turnComplete);
+    tick(2);
+    // The live view marks the line still taking text.
+    c.msg(said('It is O(n log n).'));
+    const view = events.filter(([e]) => e === 'transcript').at(-1)![1].turns;
+    expect(view.at(-1)).toMatchObject({ text: 'It is O(n log n).', partial: true });
+
+    live.emit('end_interview', {});
+    c.msg(audio(480));
+    c.msg(says('Good. That is all.'));
+    c.msg(turnComplete);
+    await vi.waitFor(() => expect(reports).toHaveLength(1));
+    expect(reports[0].transcript.map((t) => [t.role, t.text])).toEqual([
+      ['interviewer', 'Hi, I am your interviewer.'],
+      ['candidate', 'My plan is a heap.'],
+      ['interviewer', 'Tell me more.'],
+      ['candidate', 'It is O(n log n).'],
+      ['interviewer', 'Good. That is all.'],
+    ]);
+    for (const turn of reports[0].transcript) {
+      expect(Object.keys(turn).sort()).toEqual(['role', 't', 'text']);
+    }
+    // The UI ends with the same final transcript.
+    const last = events.filter(([e]) => e === 'transcript').at(-1)![1].turns;
+    expect(last).toEqual(reports[0].transcript);
   });
 });

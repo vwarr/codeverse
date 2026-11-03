@@ -14,9 +14,11 @@ export interface LiveMessage {
   toolCall?: { functionCalls?: LiveFunctionCall[] };
   serverContent?: {
     modelTurn?: { parts?: { inlineData?: { data?: string } }[] };
-    inputTranscription?: { text?: string };
+    // Sent independently of the other server messages, with no guaranteed ordering.
+    inputTranscription?: { text?: string; finished?: boolean };
     outputTranscription?: { text?: string };
     interrupted?: boolean;
+    generationComplete?: boolean;
     turnComplete?: boolean;
   };
   sessionResumptionUpdate?: { newHandle?: string; resumable?: boolean };

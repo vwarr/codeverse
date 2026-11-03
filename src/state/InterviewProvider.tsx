@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { AudioEngine } from '../lib/audio/engine';
 import { DEMO_STATE } from '../lib/env';
+import type { LiveTranscriptTurn } from '../lib/live/transcript';
 import { DEMO, transport } from '../lib/transport';
 import type {
   FeedbackReport,
@@ -79,6 +80,8 @@ export function InterviewProvider({ children }: { children: ReactNode }) {
     const onDelta = (data: { role: TranscriptTurn['role']; text: string }) =>
       dispatch({ type: 'transcript_delta', role: data.role, text: data.text });
     const onTurn = (turn: TranscriptTurn) => dispatch({ type: 'transcript_turn', turn });
+    const onTranscript = (data: { turns: LiveTranscriptTurn[] }) =>
+      dispatch({ type: 'transcript', turns: data.turns });
     const onInterrupted = () => {
       audio.current?.interrupt();
       dispatch({ type: 'interrupted' });
@@ -105,6 +108,7 @@ export function InterviewProvider({ children }: { children: ReactNode }) {
     transport.on('audio_out', onAudioOut);
     transport.on('transcript_delta', onDelta);
     transport.on('transcript_turn', onTurn);
+    transport.on('transcript', onTranscript);
     transport.on('interrupted', onInterrupted);
     transport.on('feedback', onFeedback);
     transport.on('interview_ended', onEnded);
@@ -123,6 +127,7 @@ export function InterviewProvider({ children }: { children: ReactNode }) {
       transport.off('audio_out', onAudioOut);
       transport.off('transcript_delta', onDelta);
       transport.off('transcript_turn', onTurn);
+      transport.off('transcript', onTranscript);
       transport.off('interrupted', onInterrupted);
       transport.off('feedback', onFeedback);
       transport.off('interview_ended', onEnded);

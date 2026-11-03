@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { Stack, Text } from '@mantine/core';
+import type { LiveTranscriptTurn } from '../lib/live/transcript';
 import type { TranscriptTurn } from '../lib/types';
 
 interface Props {
-  turns: TranscriptTurn[];
+  turns: LiveTranscriptTurn[];
   live?: { candidate: string; interviewer: string };
   // Follow new lines (the interview); the report shows a static transcript.
   follow?: boolean;
@@ -47,7 +48,7 @@ export function Transcript({ turns, live, follow = false }: Props) {
         </Text>
       )}
       {turns.map((t, i) => (
-        <Line key={`${i}-${t.t}`} speaker={t.role} text={t.text} />
+        <Line key={`${i}-${t.t}`} speaker={t.role} text={t.text} partial={t.partial} />
       ))}
       {live?.interviewer && <Line speaker="interviewer" text={live.interviewer} partial />}
       {live?.candidate && <Line speaker="candidate" text={live.candidate} partial />}
