@@ -13,6 +13,8 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
 
+from .prompts import INTERVIEW_MINUTES
+
 log = logging.getLogger(__name__)
 
 
@@ -69,6 +71,39 @@ RUBRICS: dict[str, list[str]] = {
 
 _TRACK_NOUN = {"swe": "coding", "debug": "debugging"}
 
+_TIMED_NOTE = (
+    " A line that starts with [mm:ss] began that long after the interview started; the interview "
+    f"is planned for about {INTERVIEW_MINUTES} minutes."
+)
+_TIMING_RULE = (
+    "\n- The transcript has timestamps. Estimate roughly how long the candidate spent on each phase "
+    "(clarifying, approach or diagnosis, coding or fixing, testing) and comment on pacing in the "
+    "summary or an improvement when it mattered, for example a late start on code or no time left "
+    "to test. Do not score pacing as its own dimension."
+)
+
+
+def _stamp(seconds: float) -> str:
+    whole = int(seconds)
+    return f"[{whole // 60:02d}:{whole % 60:02d}] "
+
+
+def _render_transcript(transcript: list[dict[str, Any]]) -> tuple[str, bool]:
+    """The transcript as CANDIDATE:/INTERVIEWER: lines, and whether any line has a timestamp.
+
+    `t` (seconds since the start) is optional per turn: old saved transcripts have none.
+    """
+    lines: list[str] = []
+    timed = False
+    for turn in transcript:
+        if not turn.get("text"):
+            continue
+        t = turn.get("t")
+        has_t = isinstance(t, int | float) and not isinstance(t, bool) and t >= 0
+        timed = timed or has_t
+        lines.append(f"{_stamp(t) if has_t else ''}{turn['role'].upper()}: {turn['text']}")
+    return ("\n".join(lines) if lines else "(no transcript captured)"), timed
+
 
 class FeedbackGenerator(Protocol):
     async def generate(
@@ -91,8 +126,7 @@ def build_feedback_prompt(
     test_summary: str | None = None,
 ) -> str:
     rubric = "\n".join(f"- {r}" for r in RUBRICS[track_id])
-    lines = [f"{t['role'].upper()}: {t['text']}" for t in transcript if t.get("text")]
-    convo = "\n".join(lines) if lines else "(no transcript captured)"
+    convo, timed = _render_transcript(transcript)
     extra = ""
     if code and code.strip():
         extra += f"\n\n<final_code>\n{code.strip()}\n</final_code>"
@@ -115,7 +149,8 @@ def build_feedback_prompt(
         f"<problem>\n{problem_text}\n</problem>\n\n"
         f"<rubric>\n{rubric}\n</rubric>\n\n"
         "<transcript>\nCANDIDATE lines are the candidate; INTERVIEWER lines are the AI interviewer. "
-        "Lines come from speech recognition, so expect small transcription errors.\n"
+        "Lines come from speech recognition, so expect small transcription errors."
+        f"{_TIMED_NOTE if timed else ''}\n"
         f"{convo}\n</transcript>{extra}\n\n"
         "<score_anchors>\n"
         "5 = strong: clear, correct and complete with little or no help; would pass a real interview.\n"
@@ -132,7 +167,7 @@ def build_feedback_prompt(
         "- Judge the candidate, not the interviewer. Hints the interviewer gave lower the score of the "
         "dimension they helped with.\n"
         "- The overall score reflects the whole interview; correctness and process weigh most. It is "
-        f"not a plain average.{test_rule}\n"
+        f"not a plain average.{test_rule}{_TIMING_RULE if timed else ''}\n"
         "</grading_rules>\n\n"
         "Based on the material above, write the report.\n"
         "- summary: two sentences.\n"
@@ -142,8 +177,8 @@ def build_feedback_prompt(
         "- strengths and improvements: up to three each, specific to this interview; improvements are "
         "actions to take next time.\n"
         "- model_answer_sketch: a few plain sentences on what a strong answer looks like.\n"
-        "- notable_moments: up to three, each with a quote copied word for word from a CANDIDATE line and "
-        "why it mattered. Leave the list empty rather than invent a quote."
+        "- notable_moments: up to three, each with a quote copied word for word from a CANDIDATE line "
+        "(without the label or timestamp) and why it mattered. Leave the list empty rather than invent a quote."
     )
 
 

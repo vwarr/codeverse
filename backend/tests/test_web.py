@@ -444,6 +444,30 @@ def test_report_rejects_bad_transcript() -> None:
     assert store.sessions[sid].ended_at is not None
 
 
+def test_report_transcript_timestamp_is_optional() -> None:
+    deps, store, _, feedback, _ = make_deps()
+    sid = start(deps, track="swe")["session"]["sessionId"]
+    turns = [
+        {"role": "interviewer", "text": "Hi.", "t": 0},
+        {"role": "candidate", "text": "No time on this one."},
+        {"role": "candidate", "text": "Bad time.", "t": "soon"},
+        {"role": "candidate", "text": "Flag, not a time.", "t": True},
+        {"role": "candidate", "text": "Negative.", "t": -3},
+        {"role": "candidate", "text": "Later.", "t": 61.25},
+    ]
+    assert call(service.create_report, deps, body={"sessionId": sid, "transcript": turns})[0] == 200
+    (gen,) = feedback.calls
+    assert gen["transcript"] == [
+        {"role": "interviewer", "text": "Hi.", "t": 0.0},
+        {"role": "candidate", "text": "No time on this one."},
+        {"role": "candidate", "text": "Bad time."},
+        {"role": "candidate", "text": "Flag, not a time."},
+        {"role": "candidate", "text": "Negative."},
+        {"role": "candidate", "text": "Later.", "t": 61.25},
+    ]
+    assert store.reports[sid]["transcript"] == gen["transcript"]
+
+
 def test_rejected_reports_end_the_session_but_unknown_ids_end_nothing() -> None:
     deps, store, *_ = make_deps()
     too_long = start(deps)["session"]["sessionId"]

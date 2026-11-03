@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import math
 import os
 import uuid
 from collections.abc import Awaitable, Callable
@@ -264,14 +265,13 @@ def _transcript(body: dict[str, Any]) -> list[dict[str, Any]]:
     for item in raw[:MAX_TRANSCRIPT_TURNS]:
         if not isinstance(item, dict) or item.get("role") not in ("candidate", "interviewer"):
             raise ApiError(400, "each transcript turn needs a role of candidate or interviewer")
-        t = item.get("t", 0)
-        turns.append(
-            {
-                "role": item["role"],
-                "text": str(item.get("text") or "")[:MAX_TURN_CHARS],
-                "t": float(t) if isinstance(t, int | float) else 0.0,
-            }
-        )
+        turn: dict[str, Any] = {"role": item["role"], "text": str(item.get("text") or "")[:MAX_TURN_CHARS]}
+        # Optional: seconds since the interview started. Kept only when it is a usable number, so
+        # the report can tell "no timing" from "spoke at 0 s".
+        t = item.get("t")
+        if isinstance(t, int | float) and not isinstance(t, bool) and math.isfinite(t) and t >= 0:
+            turn["t"] = float(t)
+        turns.append(turn)
     return turns
 
 

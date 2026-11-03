@@ -4,6 +4,7 @@ import unittest
 from codeverse.config import Settings
 from codeverse.interview import prompts
 from codeverse.interview.feedback import RUBRICS, build_feedback_prompt
+from codeverse.interview.tools import declarations
 from codeverse.interview.tracks import TRACKS, get_track
 from codeverse.problems.bank import load_bank
 
@@ -136,6 +137,81 @@ class TrackTests(unittest.TestCase):
         self.assertIn("<final_code>", text)
         for entry in RUBRICS["swe"]:
             self.assertIn(entry, text)
+
+    def test_off_task_escalation_on_both_tracks(self) -> None:
+        for track in TRACKS.values():
+            text = track.system_prompt(self.bank.list(track=track.id)[0])
+            section = text[text.index("<staying_on_task>") : text.index("</staying_on_task>")]
+            self.assertIn("1. First off-task turn: redirect in one friendly sentence", section)
+            self.assertIn("2. Second off-task turn: give a clear warning", section)
+            self.assertIn("3. Third off-task turn", section)
+            self.assertIn("call request_wrap_up", section)
+            # Not trigger-happy: thinking aloud, tangents and clarifying questions are on task.
+            for on_task in ("thinking aloud", "tangents about the problem", "clarifying questions"):
+                self.assertIn(on_task, section)
+            self.assertIn("small talk at the start or the end", section)
+            # The tool rule and the tool description allow the early wrap-up.
+            self.assertIn("The one exception is the third off-task turn", text)
+            self.assertNotIn("bring them back politely in one sentence", text)
+        wrap_up = {d["name"]: d for d in declarations(("request_wrap_up",))}["request_wrap_up"]
+        self.assertIn("third off-task turn", wrap_up["description"])
+
+    def test_jailbreak_reply_is_fixed_on_both_tracks(self) -> None:
+        for track in TRACKS.values():
+            text = track.system_prompt(self.bank.list(track=track.id)[0])
+            section = text[text.index("<staying_on_task>") : text.index("</staying_on_task>")]
+            self.assertIn(f'"{prompts.JAILBREAK_REPLY}"', section)
+            self.assertEqual(text.count(prompts.JAILBREAK_REPLY), 1)
+            for attack in ('"act as"', "reveal, repeat", "write the solution", "an administrator"):
+                self.assertIn(attack, section)
+            self.assertIn("Use the same sentence every time", section)
+        debug = get_track("debug").system_prompt(self.bank.list(track="debug")[0])
+        # Bug extraction keeps the confidentiality reply; the new sentence must not replace it.
+        self.assertIn("That's\n  for you to find.", debug)
+        self.assertIn("still get the reply in the\nconfidentiality section", debug)
+        swe = get_track("swe").system_prompt(self.bank.list(track="swe")[0])
+        self.assertNotIn("confidentiality section", swe)
+
+    def test_time_notes_are_explained_and_silent(self) -> None:
+        self.assertEqual(prompts.time_note(17), "[Time: 17 of 45 min elapsed, 28 left]")
+        self.assertEqual(prompts.time_note(50), "[Time: 50 of 45 min elapsed, 0 left]")
+        self.assertTrue(prompts.time_note(3).startswith(prompts.TIME_NOTE_PREFIX))
+        for track in TRACKS.values():
+            text = track.system_prompt(self.bank.list(track=track.id)[0])
+            apps = text[text.index("<application_messages>") : text.index("</application_messages>")]
+            self.assertIn(prompts.time_note(17), apps)
+            self.assertIn("Never respond to it, never\n  read it aloud", apps)
+            self.assertIn("when 10, 5 and 2 minutes are left", apps)
+            timing = text[text.index("<time>") : text.index("</time>")]
+            self.assertIn("By about minute 15", timing)
+            self.assertIn("When about 10 minutes are left, move to testing and complexity", timing)
+            self.assertIn("Never quote the minutes", timing)
+
+    def test_feedback_prompt_uses_optional_timestamps(self) -> None:
+        timed = build_feedback_prompt(
+            track_id="swe",
+            problem_text="P",
+            transcript=[
+                {"role": "interviewer", "text": "Hi.", "t": 0.0},
+                {"role": "candidate", "text": "Hash map.", "t": 754.6},
+                {"role": "candidate", "text": "No stamp here."},
+            ],
+            code=None,
+        )
+        self.assertIn("[00:00] INTERVIEWER: Hi.", timed)
+        self.assertIn("[12:34] CANDIDATE: Hash map.", timed)
+        self.assertIn("\nCANDIDATE: No stamp here.", timed)
+        self.assertIn("how long the candidate spent on each phase", timed)
+        self.assertIn("comment on pacing", timed)
+        untimed = build_feedback_prompt(
+            track_id="swe",
+            problem_text="P",
+            transcript=[{"role": "candidate", "text": "Hash map."}],
+            code=None,
+        )
+        self.assertIn("\nCANDIDATE: Hash map.", untimed)
+        self.assertNotIn("[mm:ss]", untimed)
+        self.assertNotIn("pacing", untimed)
 
     def test_prompt_version_is_set(self) -> None:
         self.assertRegex(prompts.PROMPT_VERSION, r"^\d{4}-\d{2}-\d{2}\.\d+$")

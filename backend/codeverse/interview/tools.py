@@ -20,8 +20,8 @@ _DEFINITIONS: dict[str, tuple[str, dict[str, Any]]] = {
     ),
     "request_wrap_up": (
         "End the interview. Call it once: when the interview phases are covered, when the candidate "
-        "says they are finished, or when they want to stop. The result contains the closing "
-        "instruction to follow.",
+        "says they are finished, when they want to stop, or on the third off-task turn. The result "
+        "contains the closing instruction to follow.",
         {"type": "object", "properties": {}},
     ),
 }
