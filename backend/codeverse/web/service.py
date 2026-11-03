@@ -20,7 +20,7 @@ from typing import Any
 from ..config import Settings, get_settings
 from ..execution import CodeRunner, LocalRunner, RunResult, SandboxRunner, job_for
 from ..interview import prompts
-from ..interview.feedback import FeedbackGenerator
+from ..interview.feedback import FeedbackGenerator, drop_unverified_quotes
 from ..interview.tools import declarations
 from ..interview.tracks import TRACKS, get_track
 from ..problems.bank import ProblemBank, get_bank
@@ -395,6 +395,7 @@ async def _create_report(row: SessionRow, req: Request, deps: Deps) -> dict[str,
             f"Could not write the feedback report ({reason}). Your transcript is saved; try again later.",
         ) from exc
 
+    report = drop_unverified_quotes(report, transcript)
     record.update(status="complete", model=model, report=report.model_dump())
     deps.store.save_report(row.id, record)
     return {"ok": True, "report": record["report"], "finalRun": record["finalRun"]}
@@ -469,9 +470,19 @@ def make_runner(settings: Settings, environ: Any = os.environ) -> CodeRunner | N
     return LocalRunner()
 
 
+def feedback_factory(settings: Settings, client: Callable[[], Any]) -> Callable[[str], FeedbackGenerator]:
+    """Report model name -> generator, for settings.report_mode. `client` makes a genai client."""
+    from ..interview.feedback import GeminiFeedbackGenerator, TwoStageFeedbackGenerator
+
+    if settings.report_mode == "two_stage":
+        return lambda model: TwoStageFeedbackGenerator(
+            client(), extract_model=settings.report_extract_model, grade_model=model
+        )
+    return lambda model: GeminiFeedbackGenerator(client(), model)
+
+
 @lru_cache
 def default_deps() -> Deps:
-    from ..interview.feedback import GeminiFeedbackGenerator
     from .store import PostgresStore
 
     settings = get_settings()
@@ -492,5 +503,5 @@ def default_deps() -> Deps:
         store=PostgresStore(settings.database_url),
         runner=make_runner(settings),
         mint_token=mint_token,
-        feedback=lambda model: GeminiFeedbackGenerator(client(), model),
+        feedback=feedback_factory(settings, client),
     )

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
@@ -124,6 +125,7 @@ def build_feedback_prompt(
     transcript: list[dict[str, Any]],
     code: str | None,
     test_summary: str | None = None,
+    evidence: str | None = None,
 ) -> str:
     rubric = "\n".join(f"- {r}" for r in RUBRICS[track_id])
     convo, timed = _render_transcript(transcript)
@@ -135,6 +137,14 @@ def build_feedback_prompt(
             "\n\n<test_suite_result>\n"
             "TEST SUITE RESULT ON THE FINAL CODE (run by the grader after the interview)\n"
             f"{test_summary}\n</test_suite_result>"
+        )
+    evidence_rule = ""
+    if evidence:
+        extra += f"\n\n<evidence_digest>\n{evidence}\n</evidence_digest>"
+        evidence_rule = (
+            "\n- The evidence digest was extracted from the material above by another model, as an index. "
+            "It may be incomplete or wrong: check every point against the transcript, final code and test "
+            "result, and trust those when they disagree. Quote only from the transcript itself."
         )
     if not test_summary:
         test_rule = ""
@@ -170,11 +180,13 @@ def build_feedback_prompt(
         "- Use only evidence in the transcript, final code and test result above. Never invent events, "
         "quotes, code or test results. If something did not happen, say so.\n"
         "- If there is no evidence for a dimension, score it 1 and say that in the justification.\n"
-        "- If the transcript is missing or very short, say so in the summary and keep scores low.\n"
+        "- If the transcript is missing or very short (the candidate spoke only a few times), or most of "
+        "the session was off task, say so in the summary. Then no dimension scores above 2 and the "
+        "overall score is at most 2: a few good sentences are not enough evidence for a higher score.\n"
         "- Judge the candidate, not the interviewer. Hints the interviewer gave lower the score of the "
         "dimension they helped with.\n"
         "- The overall score reflects the whole interview; correctness and process weigh most. It is "
-        f"not a plain average.{test_rule}{_TIMING_RULE if timed else ''}\n"
+        f"not a plain average.{test_rule}{_TIMING_RULE if timed else ''}{evidence_rule}\n"
         "</grading_rules>\n\n"
         "Based on the material above, write the report.\n"
         "- summary: two sentences.\n"
@@ -185,8 +197,174 @@ def build_feedback_prompt(
         "actions to take next time.\n"
         "- model_answer_sketch: a few plain sentences on what a strong answer looks like.\n"
         "- notable_moments: up to three, each with a quote copied word for word from a CANDIDATE line "
-        "(without the label or timestamp) and why it mattered. Leave the list empty rather than invent a quote."
+        "(without the label or timestamp) and why it mattered. Each quote comes from one line; never join "
+        "two lines. Leave the list empty rather than invent a quote."
     )
+
+
+def _norm_quote(text: str) -> str:
+    text = text.translate(str.maketrans({"\u2019": "'", "\u2018": "'", "\u201c": '"', "\u201d": '"'}))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def drop_unverified_quotes(report: FeedbackReport, transcript: list[dict[str, Any]]) -> FeedbackReport:
+    """Keep only notable moments whose quote appears word for word in a single CANDIDATE line.
+
+    Models sometimes stitch two lines together or fix a word; a report shown to the candidate must
+    never put words in their mouth. An ellipsis may join two pieces of the same line. Whitespace and
+    curly quotes are normalised; nothing else is forgiven.
+    """
+    lines = [_norm_quote(str(t.get("text") or "")) for t in transcript if t.get("role") == "candidate"]
+    kept = []
+    for moment in report.notable_moments:
+        quote = _norm_quote(moment.quote).strip("\"'").rstrip(".…").strip()
+        pieces = [p.strip(" .") for p in re.split(r"\s*(?:\.\.\.|…)\s*", quote) if p.strip(" .")]
+        if pieces and any(all(p in line for p in pieces) for line in lines):
+            kept.append(moment)
+        else:
+            log.warning(
+                "dropping a notable moment whose quote is not in the transcript: %r", moment.quote[:120]
+            )
+    return report.model_copy(update={"notable_moments": kept})
+
+
+class TimedPoint(BaseModel):
+    time: str = Field(description="mm:ss from the line's [mm:ss] stamp, or empty if lines have no stamps.")
+    text: str
+
+
+class Phase(BaseModel):
+    name: str = Field(
+        description="e.g. clarify, approach, code, test, complexity; or understand, reproduce, "
+        "hypothesise, fix, verify, explain for debugging."
+    )
+    start: str = Field(description="mm:ss of the first line in this phase, or empty.")
+    end: str = Field(description="mm:ss of the last line in this phase, or empty.")
+    what_happened: str = Field(description="One or two plain sentences, facts only.")
+
+
+class EvidenceDigest(BaseModel):
+    """Stage 1 of the two-stage report: facts pulled from the interview, no judgement."""
+
+    phases: list[Phase] = Field(description="The phases that actually happened, in order.")
+    candidate_quotes: list[TimedPoint] = Field(
+        description="Up to 12 important CANDIDATE lines or parts of lines, copied character for character."
+    )
+    hints_given: list[TimedPoint] = Field(
+        description="Each hint or leading question the interviewer gave, in its own words; empty if none."
+    )
+    test_runs: list[TimedPoint] = Field(
+        description="Each test run mentioned in the transcript and its result, plus the final grading run."
+    )
+    final_code_state: str = Field(
+        description="Two or three sentences on what the final code does and whether it solves the problem, "
+        "based on the code and the test result."
+    )
+    off_task_turns: list[TimedPoint] = Field(
+        description="CANDIDATE lines unrelated to the interview, copied exactly; empty if none."
+    )
+    complexity_stated: str = Field(
+        description="What the candidate said about time and space complexity, or 'not stated'."
+    )
+
+
+def build_evidence_prompt(
+    *,
+    track_id: str,
+    problem_text: str,
+    transcript: list[dict[str, Any]],
+    code: str | None,
+    test_summary: str | None = None,
+) -> str:
+    convo, timed = _render_transcript(transcript)
+    extra = f"\n\n<final_code>\n{code.strip()}\n</final_code>" if code and code.strip() else ""
+    if test_summary:
+        extra += f"\n\n<test_suite_result>\nRUN BY THE GRADER ON THE FINAL CODE\n{test_summary}\n</test_suite_result>"
+    return (
+        "<role>\nYou extract evidence from a mock "
+        f"{_TRACK_NOUN.get(track_id, 'technical')} interview for a grader. You do not grade. You record "
+        "only what is in the material below.\n</role>\n\n"
+        f"<problem>\n{problem_text}\n</problem>\n\n"
+        "<transcript>\nCANDIDATE lines are the candidate; INTERVIEWER lines are the AI interviewer."
+        f"{_TIMED_NOTE if timed else ''}\n{convo}\n</transcript>{extra}\n\n"
+        "<rules>\n"
+        "- Never invent, infer or embellish. If something did not happen, leave the list empty or say "
+        "'not stated'.\n"
+        "- Copy quotes character for character from CANDIDATE lines, without the label or timestamp. Do "
+        "not fix grammar, join lines or paraphrase inside a quote.\n"
+        "- Attribute carefully: something the interviewer said is not something the candidate did.\n"
+        "- Use the [mm:ss] stamps for times; leave times empty when lines have no stamps.\n"
+        "</rules>\n\n"
+        "Based on the material above, fill in the evidence digest."
+    )
+
+
+def render_evidence(digest: EvidenceDigest) -> str:
+    """The digest as plain text for the grader prompt."""
+
+    def points(items: list[TimedPoint]) -> str:
+        return "\n".join(f"- {f'[{p.time}] ' if p.time else ''}{p.text}" for p in items) or "- none"
+
+    phases = "\n".join(
+        f"- {ph.name} ({ph.start or '?'}-{ph.end or '?'}): {ph.what_happened}" for ph in digest.phases
+    )
+    return (
+        f"PHASES\n{phases or '- none'}\n\nCANDIDATE QUOTES\n{points(digest.candidate_quotes)}\n\n"
+        f"HINTS GIVEN\n{points(digest.hints_given)}\n\nTEST RUNS\n{points(digest.test_runs)}\n\n"
+        f"FINAL CODE STATE\n{digest.final_code_state}\n\nCOMPLEXITY STATED\n{digest.complexity_stated}\n\n"
+        f"OFF-TASK TURNS\n{points(digest.off_task_turns)}"
+    )
+
+
+async def _structured(client: Any, model: str, prompt: str, schema: type[BaseModel]) -> Any:
+    """One JSON-schema call to a Gemini text model, parsed into `schema`."""
+    from google.genai import types  # imported lazily so tests don't need the SDK
+
+    response = await client.aio.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=schema,
+            # No temperature: Gemini 3.6+ ignores custom sampling values (Google prompting guide).
+        ),
+    )
+    parsed = getattr(response, "parsed", None)
+    if isinstance(parsed, schema):
+        return parsed
+    return schema.model_validate(json.loads(response.text))
+
+
+class TwoStageFeedbackGenerator:
+    """REPORT_MODE=two_stage: `extract_model` writes an evidence digest, then `grade_model` writes the
+    report from the digest plus the full material (the digest alone would lose information)."""
+
+    def __init__(self, client: Any, *, extract_model: str, grade_model: str) -> None:
+        self._client = client
+        self._extract_model = extract_model
+        self._grade_model = grade_model
+
+    async def generate(
+        self,
+        *,
+        track_id: str,
+        problem_text: str,
+        transcript: list[dict[str, Any]],
+        code: str | None,
+        test_summary: str | None = None,
+    ) -> FeedbackReport:
+        material = {
+            "track_id": track_id,
+            "problem_text": problem_text,
+            "transcript": transcript,
+            "code": code,
+            "test_summary": test_summary,
+        }
+        digest = await _structured(
+            self._client, self._extract_model, build_evidence_prompt(**material), EvidenceDigest
+        )
+        prompt = build_feedback_prompt(**material, evidence=render_evidence(digest))
+        return await _structured(self._client, self._grade_model, prompt, FeedbackReport)
 
 
 class GeminiFeedbackGenerator:
@@ -203,8 +381,6 @@ class GeminiFeedbackGenerator:
         code: str | None,
         test_summary: str | None = None,
     ) -> FeedbackReport:
-        from google.genai import types  # imported lazily so tests don't need the SDK
-
         prompt = build_feedback_prompt(
             track_id=track_id,
             problem_text=problem_text,
@@ -212,19 +388,7 @@ class GeminiFeedbackGenerator:
             code=code,
             test_summary=test_summary,
         )
-        response = await self._client.aio.models.generate_content(
-            model=self._model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=FeedbackReport,
-                # No temperature: Gemini 3.6+ ignores custom sampling values (Google prompting guide).
-            ),
-        )
-        parsed = getattr(response, "parsed", None)
-        if isinstance(parsed, FeedbackReport):
-            return parsed
-        return FeedbackReport.model_validate(json.loads(response.text))
+        return await _structured(self._client, self._model, prompt, FeedbackReport)
 
 
 class StaticFeedbackGenerator:

@@ -15,7 +15,7 @@ import pytest
 from codeverse.config import Settings
 from codeverse.execution import LocalRunner, RunResult, TestJob
 from codeverse.execution import TestOutcome as Outcome
-from codeverse.interview.feedback import StaticFeedbackGenerator
+from codeverse.interview.feedback import NotableMoment, StaticFeedbackGenerator
 from codeverse.interview.prompts import PROMPT_VERSION
 from codeverse.problems.bank import get_bank
 from codeverse.web import service
@@ -816,3 +816,20 @@ def test_text_models_setting_parses_the_comma_list() -> None:
     assert only_main.text_models == [only_main.gemini_text_model]
     default = Settings.model_fields["gemini_text_fallback_models"].default
     assert default == "gemini-3.8-flash,gemini-3.5-flash-lite"
+
+
+def test_report_drops_quotes_that_are_not_in_the_transcript() -> None:
+    deps, store, _, feedback, _ = make_deps()
+    feedback.report = feedback.report.model_copy(
+        update={
+            "notable_moments": [
+                NotableMoment(quote="I'll run the tests first.", comment="good"),
+                NotableMoment(quote="I'll rewrite everything.", comment="made up"),
+            ]
+        }
+    )
+    sid = start(deps)["session"]["sessionId"]
+    status, data = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
+    assert status == 200
+    assert [m["quote"] for m in data["report"]["notable_moments"]] == ["I'll run the tests first."]
+    assert store.reports[sid]["report"]["notable_moments"] == data["report"]["notable_moments"]

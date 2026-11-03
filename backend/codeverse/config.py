@@ -10,6 +10,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 CodeRunnerName = Literal["sandbox", "local"]
+ReportMode = Literal["single", "two_stage"]
 
 # backend/.env by absolute path, so the Vercel functions (cwd repo root, e.g. under `vercel dev`)
 # and the tests (cwd backend/) read the same file. Real environment variables win.
@@ -26,6 +27,11 @@ class Settings(BaseSettings):
     # Comma list. The report tries gemini_text_model, then each of these in order, but only when a
     # model is rate limited or out of quota (each model has its own free-tier quota).
     gemini_text_fallback_models: str = "gemini-3.8-flash,gemini-3.5-flash-lite"
+    # "single": one text-model call writes the report. "two_stage": report_extract_model first pulls
+    # an evidence digest, then the report model (with its fallbacks) grades from the digest plus the
+    # full transcript. See evals/compare_report_setups.py for the comparison.
+    report_mode: ReportMode = "single"
+    report_extract_model: str = "gemini-3.5-flash-lite"
     live_voice: str = "Kore"
     # API version for ephemeral tokens and the browser's Live connection. Google's ephemeral-token
     # docs say tokens work "only with the v1beta version of the API".

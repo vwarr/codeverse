@@ -14,4 +14,6 @@ uv run ruff check
 
 Score calibration (manual, not run by pytest or CI; it calls the real report model): `uv run python evals/score_calibration.py` grades the 8 synthetic interviews in `evals/fixtures/` once each on `gemini-3.8-flash` and checks the scores against the expected bands. It prints the planned call count first and stops at `--max-calls` (default 12, retries included); use `--runs 3 --max-calls 30` for a variance check. Free-tier quota is per model and per day and shared with production: calibrating the production model means `--model gemini-3.6-flash` with a small budget (for example `--case swe-mediocre --max-calls 3`), since that model has only 20 calls a day for real reports.
 
+Report setup comparison (manual, real API calls): `uv run python evals/compare_report_setups.py` grades the same fixtures with single-stage and two-stage (`REPORT_MODE`) setups on `gemini-3.5-flash-lite` and `gemini-3.8-flash`, with hard per-model call caps; `--summarize <results.jsonl>` reprints the tables without calls.
+
 Settings come from environment variables and from `backend/.env` (see `.env.example`).

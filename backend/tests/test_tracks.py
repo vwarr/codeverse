@@ -141,6 +141,7 @@ class TrackTests(unittest.TestCase):
         )
         self.assertIn("<score_anchors>", text)
         self.assertIn("Never invent events", text)
+        self.assertIn("no dimension scores above 2", text)
         self.assertIn("CANDIDATE: I would use a stack.", text)
         self.assertIn("<final_code>", text)
         for entry in RUBRICS["swe"]:
