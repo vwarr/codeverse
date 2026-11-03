@@ -47,7 +47,7 @@ TRACKS: dict[str, Track] = {
         name="Software engineering",
         description="A coding interview on one algorithmic problem, with a live editor.",
         surface="editor",
-        tool_names=("get_current_code", "request_wrap_up"),
+        tool_names=("get_current_code", "get_last_test_run", "request_wrap_up"),
         can_run=True,
     ),
     "debug": Track(

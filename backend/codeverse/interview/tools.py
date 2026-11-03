@@ -6,19 +6,22 @@ from typing import Any
 
 _DEFINITIONS: dict[str, tuple[str, dict[str, Any]]] = {
     "get_current_code": (
-        "Return the code currently in the candidate's editor. Call this before commenting on their "
-        "code, and again whenever they say they are done or ask you to look.",
+        "Return the code currently in the candidate's editor. Call this before you comment on their "
+        "code, when they say they are done, and when they ask you to look. Do not describe code you "
+        "have not just fetched.",
         {"type": "object", "properties": {}},
     ),
     "get_last_test_run": (
         "Return the result of the most recent time the candidate pressed Run tests: how many tests "
         "passed, failing test names and messages, printed output, and whether the code has changed "
-        "since. Call this before discussing test results.",
+        "since. Call this after the candidate runs the tests and before you say anything about the "
+        "result. Never say tests pass or fail without calling it first.",
         {"type": "object", "properties": {}},
     ),
     "request_wrap_up": (
-        "Signal that the interview has covered everything and should end. Call exactly once, "
-        "when the candidate is finished or time is up.",
+        "End the interview. Call it once: when the interview phases are covered, when the candidate "
+        "says they are finished, or when they want to stop. The result contains the closing "
+        "instruction to follow.",
         {"type": "object", "properties": {}},
     ),
 }
