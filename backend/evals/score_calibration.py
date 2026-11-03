@@ -2,7 +2,7 @@
 
 Each fixture in evals/fixtures/ is a synthetic interview (transcript, final code, expected score
 bands). The script builds the report the way /api/report does: the same prompt builder and
-generator, and for tracks that grade the final run (debug) a real test run of the fixture code.
+generator, and a real test run of the fixture code (both tracks grade the final run).
 It runs every case --runs times and checks:
 
 - the overall score is inside the expected band, and per-dimension scores inside theirs;

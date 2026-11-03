@@ -136,12 +136,19 @@ def build_feedback_prompt(
             "TEST SUITE RESULT ON THE FINAL CODE (run by the grader after the interview)\n"
             f"{test_summary}\n</test_suite_result>"
         )
-    test_rule = (
-        "\n- A passing test suite does not prove the root cause was fixed. Check the final code against "
-        "the planted bugs in the problem, and judge the candidate's spoken explanation too."
-        if test_summary
-        else ""
-    )
+    if not test_summary:
+        test_rule = ""
+    elif track_id == "debug":
+        test_rule = (
+            "\n- A passing test suite does not prove the root cause was fixed. Check the final code against "
+            "the planted bugs in the problem, and judge the candidate's spoken explanation too."
+        )
+    else:
+        test_rule = (
+            "\n- The test suite result is the strongest evidence for correctness: failing hidden tests mean "
+            "the final code does not fully solve the problem, whatever was said. Passing tests do not "
+            "show the candidate's reasoning; judge the other dimensions from the transcript."
+        )
     return (
         "<role>\nYou are a senior engineer writing a fair, calibrated report on a mock "
         f"{_TRACK_NOUN.get(track_id, 'technical')} interview. The candidate will read it to improve. "

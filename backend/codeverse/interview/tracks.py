@@ -23,7 +23,8 @@ class Track:
     languages: tuple[str, ...] = ("python",)
     # The candidate can run the problem's hidden tests from the editor (when the problem has tests).
     can_run: bool = False
-    # The grader runs the tests again on the final code and puts the result in the report.
+    # The grader runs the tests again on the final code and puts the result in the report (only for
+    # problems that have tests: Problem.has_tests).
     grade_final_run: bool = False
 
     def system_prompt(self, problem: Problem, *, extra_rules: str = "") -> str:
@@ -49,6 +50,7 @@ TRACKS: dict[str, Track] = {
         surface="editor",
         tool_names=("get_current_code", "get_last_test_run", "request_wrap_up"),
         can_run=True,
+        grade_final_run=True,
     ),
     "debug": Track(
         id="debug",

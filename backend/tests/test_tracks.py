@@ -57,7 +57,7 @@ class TrackTests(unittest.TestCase):
         swe = get_track("swe").public()
         self.assertTrue(swe["canRun"])
         self.assertEqual(swe["languages"], ["python"])
-        self.assertFalse(get_track("swe").grade_final_run)
+        self.assertTrue(get_track("swe").grade_final_run)
         self.assertTrue(t.grade_final_run)
 
     def test_debug_prompt_includes_code_bugs_and_phases(self) -> None:
@@ -83,6 +83,14 @@ class TrackTests(unittest.TestCase):
         self.assertIn("TEST SUITE RESULT", text)
         self.assertIn("3 of 8 tests passed.", text)
         self.assertIn("Root cause", text)
+
+    def test_swe_feedback_prompt_uses_the_final_test_result(self) -> None:
+        text = build_feedback_prompt(
+            track_id="swe", problem_text="P", transcript=[], code="x", test_summary="0 of 3 tests passed."
+        )
+        self.assertIn("0 of 3 tests passed.", text)
+        self.assertIn("strongest evidence for correctness", text)
+        self.assertNotIn("planted bugs", text)
 
     def test_debug_prompt_has_confidentiality_rule(self) -> None:
         for p in self.bank.list(track="debug"):

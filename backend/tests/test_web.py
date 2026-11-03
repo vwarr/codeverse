@@ -342,7 +342,8 @@ def test_report_runs_final_tests_saves_and_ends_session() -> None:
 
 def test_report_for_swe_track_grades_code_without_tests() -> None:
     deps, _, _, feedback, _ = make_deps()
-    sid = start(deps, track="swe")["session"]["sessionId"]
+    # A swe problem without hidden tests: nothing to run, the grader reads the code.
+    sid = start(deps, track="swe", problemId="reverse-linked-list")["session"]["sessionId"]
     status, data = call(service.create_report, deps, body={"sessionId": sid, "transcript": [], "code": "x"})
     assert status == 200 and data["finalRun"] is None
     assert feedback.calls[0]["code"] == "x" and feedback.calls[0]["test_summary"] is None
@@ -589,12 +590,15 @@ def test_swe_problem_without_tests_cannot_run() -> None:
     assert status == 400
 
 
-def test_swe_report_does_not_grade_a_final_run() -> None:
+def test_swe_report_grades_a_final_run_when_the_problem_has_tests() -> None:
     deps, store, _, feedback, _ = make_deps()
     sid = start(deps, track="swe", problemId="two-sum")["session"]["sessionId"]
-    status, data = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
-    assert status == 200 and data["finalRun"] is None
-    assert feedback.calls[0]["test_summary"] is None
+    body = {"sessionId": sid, "transcript": TRANSCRIPT, "code": "def two_sum(nums, target): ..."}
+    status, data = call(service.create_report, deps, body=body)
+    assert status == 200 and data["finalRun"]["passed"] == 1
+    assert "1 of 2 tests passed" in feedback.calls[0]["test_summary"]
+    assert len(deps.runner.calls) == 1  # type: ignore[union-attr]
+    assert store.reports[sid]["finalRun"]["total"] == 2
 
 
 # ---------------------------------------------------------------------- history
