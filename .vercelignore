@@ -1,0 +1,9 @@
+# Never upload local secrets or local environments with `vercel deploy`. Python function bundles
+# can contain any project file, and the debugging track's runner can read the bundle.
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.venv
+backend/audio_files
+backend/tests

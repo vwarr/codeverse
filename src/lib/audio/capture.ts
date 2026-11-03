@@ -110,6 +110,13 @@ export class MicCapture {
     this.source.connect(this.node);
   }
 
+  /** Mute: the track sends silence, so the interviewer hears nothing. The stream stays open. */
+  setMuted(muted: boolean): void {
+    this.stream?.getAudioTracks().forEach((t) => {
+      t.enabled = !muted;
+    });
+  }
+
   stop(): void {
     this.source?.disconnect();
     this.node?.disconnect();

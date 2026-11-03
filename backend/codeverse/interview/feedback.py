@@ -45,34 +45,46 @@ RUBRICS: dict[str, list[str]] = {
         "Complexity analysis: accurate time and space reasoning",
         "Code quality: naming, structure, idiomatic use of the language",
     ],
-    "ib": [
-        "Communication: structured, concise answers",
-        "Technical accuracy: valuation and accounting mechanics",
-        "Intuition: explaining why, not just what",
-        "Composure: handling follow-ups and pushback",
-    ],
-    "quant": [
-        "Communication: stating assumptions and reasoning aloud",
-        "Mathematical rigour: correct setup and manipulation",
-        "Sanity checking: verifying results against simple cases",
-        "Speed and confidence",
+    "debug": [
+        "Communication: narrating hypotheses and reasoning aloud, explaining the root cause clearly",
+        "Reproduction and evidence: running the tests or building a failing case before changing code, reading failures carefully",
+        "Hypothesis-driven process: forming one testable hypothesis at a time instead of guessing or changing several things at once",
+        "Root cause and fix quality: fixing the underlying cause of every planted bug, not the symptom, without breaking anything else",
+        "Verification and prevention: rerunning tests after the fix and proposing how to stop this class of bug recurring",
     ],
 }
 
 
 class FeedbackGenerator(Protocol):
     async def generate(
-        self, *, track_id: str, problem_text: str, transcript: list[dict[str, Any]], code: str | None
+        self,
+        *,
+        track_id: str,
+        problem_text: str,
+        transcript: list[dict[str, Any]],
+        code: str | None,
+        test_summary: str | None = None,
     ) -> FeedbackReport: ...
 
 
 def build_feedback_prompt(
-    *, track_id: str, problem_text: str, transcript: list[dict[str, Any]], code: str | None
+    *,
+    track_id: str,
+    problem_text: str,
+    transcript: list[dict[str, Any]],
+    code: str | None,
+    test_summary: str | None = None,
 ) -> str:
     rubric = "\n".join(f"- {r}" for r in RUBRICS[track_id])
     lines = [f"{t['role'].upper()}: {t['text']}" for t in transcript if t.get("text")]
     convo = "\n".join(lines) if lines else "(no transcript captured)"
     code_block = f"\n\nFINAL CODE\n{code.strip()}" if code and code.strip() else ""
+    if test_summary:
+        code_block += (
+            "\n\nTEST SUITE RESULT ON THE FINAL CODE (run by the grader after the interview)\n"
+            f"{test_summary}\nA passing suite does not prove the root cause was fixed; check the final code "
+            "against the planted bugs in PROBLEM and judge the candidate's explanation too."
+        )
     return (
         "You are grading a mock interview. Be specific and honest; cite what the candidate actually said. "
         "Scores are 1 (poor) to 5 (strong hire). Do not inflate.\n\n"
@@ -91,12 +103,22 @@ class GeminiFeedbackGenerator:
         self._model = model
 
     async def generate(
-        self, *, track_id: str, problem_text: str, transcript: list[dict[str, Any]], code: str | None
+        self,
+        *,
+        track_id: str,
+        problem_text: str,
+        transcript: list[dict[str, Any]],
+        code: str | None,
+        test_summary: str | None = None,
     ) -> FeedbackReport:
         from google.genai import types  # imported lazily so tests don't need the SDK
 
         prompt = build_feedback_prompt(
-            track_id=track_id, problem_text=problem_text, transcript=transcript, code=code
+            track_id=track_id,
+            problem_text=problem_text,
+            transcript=transcript,
+            code=code,
+            test_summary=test_summary,
         )
         response = await self._client.aio.models.generate_content(
             model=self._model,
@@ -128,9 +150,21 @@ class StaticFeedbackGenerator:
         self.calls: list[dict[str, Any]] = []
 
     async def generate(
-        self, *, track_id: str, problem_text: str, transcript: list[dict[str, Any]], code: str | None
+        self,
+        *,
+        track_id: str,
+        problem_text: str,
+        transcript: list[dict[str, Any]],
+        code: str | None,
+        test_summary: str | None = None,
     ) -> FeedbackReport:
         self.calls.append(
-            {"track_id": track_id, "problem_text": problem_text, "transcript": transcript, "code": code}
+            {
+                "track_id": track_id,
+                "problem_text": problem_text,
+                "transcript": transcript,
+                "code": code,
+                "test_summary": test_summary,
+            }
         )
         return self.report

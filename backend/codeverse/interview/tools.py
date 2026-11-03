@@ -23,6 +23,19 @@ async def get_current_code(session: InterviewSession, _args: dict[str, Any]) -> 
     }
 
 
+async def get_last_test_run(session: InterviewSession, _args: dict[str, Any]) -> dict[str, Any]:
+    run = session.last_run
+    if run is None:
+        return {"ran": False, "note": "The candidate has not run the tests yet."}
+    return {
+        "ran": True,
+        "runs_so_far": session.run_count,
+        "seconds_ago": round(session.seconds_since_last_run() or 0),
+        "code_changed_since": session.code != session.last_run_code,
+        "summary": run.summary(max_failures=8),
+    }
+
+
 async def request_wrap_up(session: InterviewSession, _args: dict[str, Any]) -> dict[str, Any]:
     started = await session.begin_wrap_up(reason="interviewer", via_tool=True)
     if not started:
@@ -37,6 +50,13 @@ _DEFINITIONS: dict[str, tuple[str, dict[str, Any], Handler]] = {
         {"type": "object", "properties": {}},
         get_current_code,
     ),
+    "get_last_test_run": (
+        "Return the result of the most recent time the candidate pressed Run tests: how many tests "
+        "passed, failing test names and messages, printed output, and whether the code has changed "
+        "since. Call this before discussing test results.",
+        {"type": "object", "properties": {}},
+        get_last_test_run,
+    ),
     "request_wrap_up": (
         "Signal that the interview has covered everything and should end. Call exactly once, "
         "when the candidate is finished or time is up.",
@@ -44,6 +64,20 @@ _DEFINITIONS: dict[str, tuple[str, dict[str, Any], Handler]] = {
         request_wrap_up,
     ),
 }
+
+
+def declarations(names: tuple[str, ...]) -> list[dict[str, Any]]:
+    """Function declarations for the Live API, without handlers (the browser runs the tools)."""
+    out: list[dict[str, Any]] = []
+    for name in names:
+        description, params, _handler = _DEFINITIONS[name]
+        # BLOCKING: the Live model waits for the result. Some Live models default to NON_BLOCKING,
+        # which lets the model talk about code or test results it has not seen yet.
+        decl: dict[str, Any] = {"name": name, "description": description, "behavior": "BLOCKING"}
+        if params.get("properties"):
+            decl["parameters"] = params
+        out.append(decl)
+    return out
 
 
 def tools_for(session: InterviewSession, names: tuple[str, ...]) -> list[ToolSpec]:

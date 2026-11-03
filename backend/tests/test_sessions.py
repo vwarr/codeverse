@@ -256,17 +256,6 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.wrap_up_reason, "time_limit")
         await session.close()
 
-    async def test_conversation_track_has_no_code_tool_and_no_code_in_feedback(self) -> None:
-        session, backend, _, _, feedback = self.make(track_id="ib", problem_id="ib-walk-me-through-dcf")
-        await session.start()
-        self.assertEqual([t.name for t in backend.tools], ["request_wrap_up"])
-        await session.on_code("irrelevant", "python")
-        await backend.push(VoiceEvent("tool_call", tool_name="request_wrap_up", tool_call_id="c"))
-        await settle()
-        await backend.speak("Bye")
-        await settle()
-        self.assertIsNone(feedback.calls[0]["code"])
-
     async def test_close_on_disconnect_does_not_generate_feedback(self) -> None:
         session, backend, _, _, feedback = self.make()
         await session.start()
@@ -278,3 +267,128 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DebugSessionTests(unittest.IsolatedAsyncioTestCase):
+    """Debug track sessions run tests through the real runner (it's fast and local)."""
+
+    def make(self, problem_id: str = "shopping-cart-leak", **kw: Any):
+        problem = load_bank().get(problem_id)
+        assert problem is not None
+        backend = FakeVoiceBackend()
+        rec = Recorder()
+        feedback = StaticFeedbackGenerator()
+        session = InterviewSession(
+            sid="sid-d",
+            track=get_track("debug"),
+            problem=problem,
+            backend=backend,
+            emit=rec,
+            feedback=feedback,
+            clock=FakeClock(),
+            code_debounce=0.01,
+            **kw,
+        )
+        return session, problem, backend, rec, feedback
+
+    async def test_public_and_tools(self) -> None:
+        session, _, backend, _, _ = self.make()
+        await session.start()
+        pub = session.public()
+        self.assertEqual((pub["surface"], pub["languages"], pub["canRun"]), ("editor", ["python"], True))
+        self.assertNotIn("bugs", pub["problem"])
+        self.assertEqual(
+            [t.name for t in backend.tools], ["get_current_code", "get_last_test_run", "request_wrap_up"]
+        )
+        assert backend.system_prompt is not None
+        self.assertIn("PLANTED BUGS", backend.system_prompt)
+        await session.close()
+
+    async def test_run_tests_emits_result_and_tells_the_model(self) -> None:
+        session, problem, backend, rec, _ = self.make()
+        await session.start()
+        await backend.speak("Hi")
+        await settle()
+        ack = await session.run_tests(problem.starter_code["python"])
+        self.assertTrue(ack["ok"], ack)
+        self.assertFalse(ack["result"]["ok"])
+        self.assertEqual(ack["result"]["run"], 1)
+        self.assertEqual(rec.of("run_result")[0]["total"], ack["result"]["total"])
+        self.assertTrue(any("ran the test suite" in c for c in backend.context_received))
+
+        # The interviewer's tool sees the same run.
+        await backend.push(VoiceEvent("tool_call", tool_name="get_last_test_run", tool_call_id="r1"))
+        await settle()
+        result = backend.tool_results[-1][2]
+        self.assertTrue(result["ran"])
+        self.assertFalse(result["code_changed_since"])
+        self.assertIn("tests passed", result["summary"])
+
+        await session.on_code(problem.reference_solution or "")
+        await backend.push(VoiceEvent("tool_call", tool_name="get_last_test_run", tool_call_id="r2"))
+        await settle()
+        self.assertTrue(backend.tool_results[-1][2]["code_changed_since"])
+        await session.close()
+
+    async def test_last_run_tool_before_any_run(self) -> None:
+        session, _, backend, _, _ = self.make()
+        await session.start()
+        await backend.push(VoiceEvent("tool_call", tool_name="get_last_test_run", tool_call_id="r0"))
+        await settle()
+        self.assertFalse(backend.tool_results[-1][2]["ran"])
+        await session.close()
+
+    async def test_run_limit_and_not_running_states(self) -> None:
+        session, problem, backend, _, _ = self.make(max_runs=1)
+        ack = await session.run_tests("x = 1")
+        self.assertFalse(ack["ok"])  # not started yet
+        await session.start()
+        await backend.speak("Hi")
+        await settle()
+        self.assertTrue((await session.run_tests(problem.starter_code["python"]))["ok"])
+        ack = await session.run_tests(problem.starter_code["python"])
+        self.assertFalse(ack["ok"])
+        self.assertIn("limit", ack["error"])
+        await session.close()
+
+    async def test_execution_disabled(self) -> None:
+        session, _, backend, _, _ = self.make(runner=None)
+        await session.start()
+        await backend.speak("Hi")
+        await settle()
+        self.assertFalse(session.public()["canRun"])
+        self.assertFalse((await session.run_tests("x = 1"))["ok"])
+        await session.close()
+
+    async def test_wrap_up_grades_final_code_and_passes_result_to_feedback(self) -> None:
+        session, problem, backend, rec, feedback = self.make()
+        await session.start()
+        await backend.speak("Hi")
+        await settle()
+        await session.on_code(problem.reference_solution or "")
+        await backend.push(VoiceEvent("tool_call", tool_name="request_wrap_up", tool_call_id="w"))
+        await settle()
+        await backend.speak("Thanks, goodbye.")
+        for _ in range(200):  # the final run is a real subprocess
+            if feedback.calls:
+                break
+            await asyncio.sleep(0.02)
+        final = rec.of("final_tests")
+        self.assertEqual(len(final), 1)
+        self.assertTrue(final[0]["ok"], final[0])
+        self.assertEqual(feedback.calls[0]["track_id"], "debug")
+        self.assertIn("tests passed", feedback.calls[0]["test_summary"])
+        self.assertIn("PLANTED BUGS", feedback.calls[0]["problem_text"])
+
+    async def test_swe_track_never_runs_code(self) -> None:
+        problem = load_bank().get("two-sum")
+        assert problem is not None
+        session = InterviewSession(
+            sid="s",
+            track=get_track("swe"),
+            problem=problem,
+            backend=FakeVoiceBackend(),
+            emit=Recorder(),
+        )
+        self.assertFalse(session.public()["canRun"])
+        await session.close()

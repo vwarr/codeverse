@@ -1,0 +1,9 @@
+# Python dependencies of the Vercel functions in api/ (they import backend/codeverse).
+# Keep web frameworks (fastapi, flask) out of this file: Vercel would detect a Python framework
+# preset and route every request to it instead of serving the Vite app.
+google-genai>=2.32,<3
+pydantic>=2.7,<3
+pydantic-settings>=2.3,<3
+psycopg[binary]>=3.2,<4
+# Vercel Sandbox SDK: the debugging track's test runs (execution/sandbox.py).
+vercel>=0.12.2,<1

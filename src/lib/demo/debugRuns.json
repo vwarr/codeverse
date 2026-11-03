@@ -1,0 +1,363 @@
+{
+ "analytics-sessionizer": {
+  "buggy": {
+   "passed": 5,
+   "total": 8,
+   "outcomes": [
+    {
+     "name": "SessionizeTests.test_average",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_gap_of_exactly_the_limit_stays_in_session",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_long_gap_starts_new_session",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_no_negative_durations_with_shuffled_ingest",
+     "status": "failed",
+     "message": "AssertionError: -3000 not greater than or equal to 0"
+    },
+    {
+     "name": "SessionizeTests.test_out_of_order_events",
+     "status": "failed",
+     "message": "AssertionError: Lists differ: ['/b', '/a', '/c'] != ['/a', '/b', '/c']\n\nFirst differing element 0:\n'/b'\n'/a'\n\n- ['/b', '/a', '/c']\n+ ['/a', '/b', '/c']"
+    },
+    {
+     "name": "SessionizeTests.test_single_burst_is_one_session",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_steady_activity_is_one_long_session",
+     "status": "failed",
+     "message": "AssertionError: 4 != 1 : got 4 sessions for continuous activity"
+    },
+    {
+     "name": "SessionizeTests.test_users_are_independent",
+     "status": "passed",
+     "message": ""
+    }
+   ],
+   "stdout": "",
+   "stderr": "",
+   "load_error": null,
+   "timed_out": false,
+   "duration_ms": 52,
+   "ok": false
+  },
+  "fixed": {
+   "passed": 8,
+   "total": 8,
+   "outcomes": [
+    {
+     "name": "SessionizeTests.test_average",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_gap_of_exactly_the_limit_stays_in_session",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_long_gap_starts_new_session",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_no_negative_durations_with_shuffled_ingest",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_out_of_order_events",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_single_burst_is_one_session",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_steady_activity_is_one_long_session",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "SessionizeTests.test_users_are_independent",
+     "status": "passed",
+     "message": ""
+    }
+   ],
+   "stdout": "",
+   "stderr": "",
+   "load_error": null,
+   "timed_out": false,
+   "duration_ms": 51,
+   "ok": true
+  },
+  "fixed_code": "\"\"\"Group raw click events into user sessions for the analytics dashboard.\n\nA session is a run of events from one user where no two consecutive events are more than\nSESSION_GAP seconds apart. Events arrive from several ingest workers, so they are NOT guaranteed\nto be in timestamp order.\n\"\"\"\n\nfrom collections import defaultdict\nfrom dataclasses import dataclass, field\n\nSESSION_GAP = 30 * 60  # seconds of inactivity that end a session\n\n\n@dataclass\nclass Event:\n    user_id: str\n    ts: int  # unix seconds\n    page: str\n\n\n@dataclass\nclass Session:\n    user_id: str\n    start: int\n    end: int\n    pages: list[str] = field(default_factory=list)\n\n    @property\n    def duration(self) -> int:\n        return self.end - self.start\n\n\ndef sessionize(events):\n    \"\"\"Return {user_id: [Session, ...]} with each user's sessions in chronological order.\"\"\"\n    by_user = defaultdict(list)\n    for ev in events:\n        by_user[ev.user_id].append(ev)\n\n    result = {}\n    for user_id, user_events in by_user.items():\n        sessions = []\n        current = None\n        for ev in sorted(user_events, key=lambda e: e.ts):\n            if current is None or ev.ts - current.end > SESSION_GAP:\n                current = Session(user_id, ev.ts, ev.ts, [ev.page])\n                sessions.append(current)\n            else:\n                current.end = ev.ts\n                current.pages.append(ev.page)\n        result[user_id] = sessions\n    return result\n\n\ndef average_session_seconds(events):\n    sessions = [s for user in sessionize(events).values() for s in user]\n    if not sessions:\n        return 0.0\n    return sum(s.duration for s in sessions) / len(sessions)\n"
+ },
+ "deploy-order": {
+  "buggy": {
+   "passed": 5,
+   "total": 12,
+   "outcomes": [
+    {
+     "name": "PlanDeployTests.test_already_running_services_are_skipped",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "PlanDeployTests.test_long_chain_order_is_preserved",
+     "status": "failed",
+     "message": "AssertionError: Lists differ: ['s9', 's3', 's7', 's2', 's8', 's11', 's0', 's4', 's1', 's10', 's5', 's6'] != ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11']\n\nFirst differing element 0:\n's9'\n's0'\n\n- ['s9', 's3', 's7', 's2', 's8', 's11', 's0', 's4', 's1', 's10', 's5', 's6']\n+ ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11']"
+    },
+    {
+     "name": "PlanDeployTests.test_multiple_targets_share_dependencies_once",
+     "status": "failed",
+     "message": "AssertionError: 4 not less than 1 : api starts before its dependency auth: ['cdn', 'api', 'worker', 'db', 'auth', 'queue', 'cache', 'web']"
+    },
+    {
+     "name": "PlanDeployTests.test_planning_does_not_change_start_order",
+     "status": "failed",
+     "message": "AssertionError: Lists differ: ['db', 'auth', 'cache', 'api', 'web'] != ['db', 'auth', 'cache', 'api', 'cdn', 'web']\n\nFirst differing element 4:\n'web'\n'cdn'\n\nSecond list contains 1 additional elements.\nFirst extra element 5:\n'web'\n\n- ['db', 'auth', 'cache', 'api', 'web']\n+ ['db', 'auth', 'cache', 'api', 'cdn', 'web']\n?                                +++++++"
+    },
+    {
+     "name": "PlanDeployTests.test_planning_twice_with_one_resolver_is_stable",
+     "status": "failed",
+     "message": "AssertionError: 'db' not found in ['auth', 'api'] : a later deploy lost db because an earlier one skipped it"
+    },
+    {
+     "name": "PlanDeployTests.test_single_target",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_dependencies_come_first",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_diamond_is_not_a_cycle",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_direct_cycle_raises",
+     "status": "failed",
+     "message": "AssertionError: CycleError not raised"
+    },
+    {
+     "name": "ResolverTests.test_indirect_cycle_raises",
+     "status": "failed",
+     "message": "AssertionError: CycleError not raised"
+    },
+    {
+     "name": "ResolverTests.test_leaf",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_self_dependency_raises",
+     "status": "failed",
+     "message": "AssertionError: CycleError not raised"
+    }
+   ],
+   "stdout": "",
+   "stderr": "",
+   "load_error": null,
+   "timed_out": false,
+   "duration_ms": 56,
+   "ok": false
+  },
+  "fixed": {
+   "passed": 12,
+   "total": 12,
+   "outcomes": [
+    {
+     "name": "PlanDeployTests.test_already_running_services_are_skipped",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "PlanDeployTests.test_long_chain_order_is_preserved",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "PlanDeployTests.test_multiple_targets_share_dependencies_once",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "PlanDeployTests.test_planning_does_not_change_start_order",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "PlanDeployTests.test_planning_twice_with_one_resolver_is_stable",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "PlanDeployTests.test_single_target",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_dependencies_come_first",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_diamond_is_not_a_cycle",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_direct_cycle_raises",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_indirect_cycle_raises",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_leaf",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "ResolverTests.test_self_dependency_raises",
+     "status": "passed",
+     "message": ""
+    }
+   ],
+   "stdout": "",
+   "stderr": "",
+   "load_error": null,
+   "timed_out": false,
+   "duration_ms": 47,
+   "ok": true
+  },
+  "fixed_code": "\"\"\"Work out the order to start services in for a deploy.\n\n`graph` maps each service to the services it depends on. A service may only start after every\nservice it depends on (directly or transitively) has started. A dependency cycle is a\nconfiguration error and must raise CycleError rather than produce an order.\n\"\"\"\n\n\nclass CycleError(Exception):\n    pass\n\n\nclass Resolver:\n    def __init__(self, graph):\n        self.graph = graph\n        self._cache = {}\n\n    def start_order(self, service):\n        \"\"\"Return `service` and everything it depends on, dependencies first, `service` last.\"\"\"\n        if service in self._cache:\n            return list(self._cache[service])\n\n        order = []\n        visited = set()\n        in_progress = set()\n\n        def visit(node):\n            if node in visited:\n                return\n            if node in in_progress:\n                raise CycleError(f\"dependency cycle through {node!r}\")\n            in_progress.add(node)\n            for dep in self.graph.get(node, []):\n                visit(dep)\n            in_progress.discard(node)\n            visited.add(node)\n            order.append(node)\n\n        visit(service)\n        self._cache[service] = order\n        return list(order)\n\n\ndef plan_deploy(resolver, targets, already_running=()):\n    \"\"\"Return the services to start, in a valid order, to bring every target up.\n\n    Services in `already_running` are skipped. Each service appears at most once.\n    \"\"\"\n    steps = []\n    for target in targets:\n        order = resolver.start_order(target)\n        for name in already_running:\n            if name in order:\n                order.remove(name)\n        steps.extend(order)\n    return list(dict.fromkeys(steps))\n"
+ },
+ "shopping-cart-leak": {
+  "buggy": {
+   "passed": 2,
+   "total": 8,
+   "outcomes": [
+    {
+     "name": "CartTests.test_add_and_total",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_adding_same_sku_merges_lines",
+     "status": "failed",
+     "message": "AssertionError: 2 != 1"
+    },
+    {
+     "name": "CartTests.test_bulk_discount_applies_at_threshold",
+     "status": "failed",
+     "message": "AssertionError: 1420 != 900"
+    },
+    {
+     "name": "CartTests.test_invalid_quantity",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_new_cart_is_empty_after_other_carts_were_used",
+     "status": "failed",
+     "message": "AssertionError: Lists differ: [LineItem(sku='apple', unit_price_cents=50[122 chars]=10)] != []\n\nFirst list contains 3 additional elements.\nFirst extra element 0:\nLineItem(sku='apple', unit_price_cents=50, quantity=8)\n\n+ []\n- [LineItem(sku='apple', unit_price_cents=50, quantity=8),\n-  LineItem(sku='pear', unit_price_cents=120, quantity=3),\n-  LineItem(sku='bolt', unit_price_cents=100, quantity=10)]"
+    },
+    {
+     "name": "CartTests.test_remove",
+     "status": "failed",
+     "message": "AssertionError: Lists differ: ['pear', 'bolt'] != ['pear']\n\nFirst list contains 1 additional elements.\nFirst extra element 1:\n'bolt'\n\n- ['pear', 'bolt']\n+ ['pear']"
+    },
+    {
+     "name": "CartTests.test_seeding_a_cart_does_not_alias_the_callers_list",
+     "status": "failed",
+     "message": "AssertionError: Lists differ: [LineItem(sku='apple', unit_price_cents=50, quantity=1)] != []\n\nFirst list contains 1 additional elements.\nFirst extra element 0:\nLineItem(sku='apple', unit_price_cents=50, quantity=1)\n\n- [LineItem(sku='apple', unit_price_cents=50, quantity=1)]\n+ [] : adding to the cart modified the list the caller passed in"
+    },
+    {
+     "name": "CartTests.test_two_customers_have_separate_carts",
+     "status": "failed",
+     "message": "AssertionError: 24 != 0 : bob's new cart already contains alice's items"
+    }
+   ],
+   "stdout": "",
+   "stderr": "",
+   "load_error": null,
+   "timed_out": false,
+   "duration_ms": 50,
+   "ok": false
+  },
+  "fixed": {
+   "passed": 8,
+   "total": 8,
+   "outcomes": [
+    {
+     "name": "CartTests.test_add_and_total",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_adding_same_sku_merges_lines",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_bulk_discount_applies_at_threshold",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_invalid_quantity",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_new_cart_is_empty_after_other_carts_were_used",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_remove",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_seeding_a_cart_does_not_alias_the_callers_list",
+     "status": "passed",
+     "message": ""
+    },
+    {
+     "name": "CartTests.test_two_customers_have_separate_carts",
+     "status": "passed",
+     "message": ""
+    }
+   ],
+   "stdout": "",
+   "stderr": "",
+   "load_error": null,
+   "timed_out": false,
+   "duration_ms": 48,
+   "ok": true
+  },
+  "fixed_code": "\"\"\"Shopping cart for the checkout service.\n\nA Cart holds line items for one customer. Prices are in cents to avoid float rounding.\n\"\"\"\n\nfrom dataclasses import dataclass\n\n\n@dataclass\nclass LineItem:\n    sku: str\n    unit_price_cents: int\n    quantity: int = 1\n\n    @property\n    def subtotal_cents(self) -> int:\n        return self.unit_price_cents * self.quantity\n\n\nclass Cart:\n    BULK_THRESHOLD = 10  # 10 or more units of one SKU get the bulk discount\n    BULK_DISCOUNT = 0.10\n\n    def __init__(self, customer_id, items=None):\n        self.customer_id = customer_id\n        self.items = list(items) if items is not None else []\n\n    def add(self, sku, unit_price_cents, quantity=1):\n        if quantity <= 0:\n            raise ValueError(\"quantity must be positive\")\n        for item in self.items:\n            if item.sku == sku:\n                item.quantity += quantity\n                return item\n        item = LineItem(sku, unit_price_cents, quantity)\n        self.items.append(item)\n        return item\n\n    def remove(self, sku):\n        self.items = [i for i in self.items if i.sku != sku]\n\n    def item_count(self):\n        return sum(i.quantity for i in self.items)\n\n    def total_cents(self):\n        total = 0\n        for item in self.items:\n            line = item.subtotal_cents\n            if item.quantity >= self.BULK_THRESHOLD:\n                line = round(line * (1 - self.BULK_DISCOUNT))\n            total += line\n        return total\n"
+ }
+}

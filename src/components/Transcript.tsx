@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { Box, ScrollArea, Stack, Text } from '@mantine/core';
+import { Stack, Text } from '@mantine/core';
 import type { TranscriptTurn } from '../lib/types';
 
 interface Props {
   turns: TranscriptTurn[];
-  live: { candidate: string; interviewer: string };
-  height?: number | string;
+  live?: { candidate: string; interviewer: string };
+  // Follow new lines (the interview); the report shows a static transcript.
+  follow?: boolean;
 }
 
 function Line({
@@ -17,38 +18,40 @@ function Line({
   text: string;
   partial?: boolean;
 }) {
-  const isYou = speaker === 'candidate';
   return (
-    <Box style={{ opacity: partial ? 0.6 : 1 }}>
-      <Text size="xs" c="dimmed" fw={600} tt="uppercase" style={{ letterSpacing: '.06em' }}>
-        {isYou ? 'You' : 'Interviewer'}
+    <Stack gap={4} opacity={partial ? 0.75 : 1}>
+      <span className="cv-speaker" data-role={speaker}>
+        {speaker === 'candidate' ? 'You' : 'Interviewer'}
+      </span>
+      <Text size="md" lh={1.55}>
+        {text}
       </Text>
-      <Text size="sm">{text}</Text>
-    </Box>
+    </Stack>
   );
 }
 
-export function Transcript({ turns, live, height = 320 }: Props) {
+export function Transcript({ turns, live, follow = false }: Props) {
   const bottom = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' });
-  }, [turns.length, live.candidate, live.interviewer]);
+    if (follow) {
+      bottom.current?.scrollIntoView({ block: 'end' });
+    }
+  }, [follow, turns.length, live?.candidate, live?.interviewer]);
 
+  const empty = turns.length === 0 && !live?.candidate && !live?.interviewer;
   return (
-    <ScrollArea h={height} type="auto" offsetScrollbars>
-      <Stack gap="sm" pr="xs">
-        {turns.length === 0 && !live.candidate && !live.interviewer && (
-          <Text size="sm" c="dimmed">
-            The conversation will appear here.
-          </Text>
-        )}
-        {turns.map((t, i) => (
-          <Line key={`${i}-${t.t}`} speaker={t.role} text={t.text} />
-        ))}
-        {live.interviewer && <Line speaker="interviewer" text={live.interviewer} partial />}
-        {live.candidate && <Line speaker="candidate" text={live.candidate} partial />}
-        <div ref={bottom} />
-      </Stack>
-    </ScrollArea>
+    <Stack gap={20}>
+      {empty && (
+        <Text size="sm" c="dimmed">
+          The conversation will appear here.
+        </Text>
+      )}
+      {turns.map((t, i) => (
+        <Line key={`${i}-${t.t}`} speaker={t.role} text={t.text} />
+      ))}
+      {live?.interviewer && <Line speaker="interviewer" text={live.interviewer} partial />}
+      {live?.candidate && <Line speaker="candidate" text={live.candidate} partial />}
+      <div ref={bottom} />
+    </Stack>
   );
 }

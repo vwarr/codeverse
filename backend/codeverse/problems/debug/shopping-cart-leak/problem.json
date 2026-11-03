@@ -1,0 +1,18 @@
+{
+  "title": "Shopping Cart Leak",
+  "difficulty": "easy",
+  "module_name": "cart",
+  "tags": ["python", "mutable-state", "classes"],
+  "statement": "**Bug report — checkout service (P1)**\n\nSupport has three tickets from customers who opened the site and found items in their cart that they never added. One customer says the items look like \"someone else's order\". It only seems to happen while the server has been up for a while; right after a deploy, carts look fine.\n\nThe code that manages carts is in `cart.py` in the editor. Press **Run tests** to run the team's test suite against your version of the file. Find the cause, fix it, and be ready to explain why it happened.",
+  "constraints": [
+    "Python 3.11, standard library only",
+    "Keep the public API of Cart the same"
+  ],
+  "bugs": [
+    "Cart.__init__ uses a mutable default argument (items=[]). The default list is created once when the function is defined, so every Cart built without items shares the same list and items leak between customers. The fix is items=None and creating a new list per instance; copying a passed-in list (list(items)) also stops the cart aliasing the caller's list."
+  ],
+  "hints": [
+    "Try creating two carts in a row and adding to only one of them. What does the other one contain?",
+    "When is the default value of a function argument evaluated in Python?"
+  ]
+}

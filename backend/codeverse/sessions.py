@@ -21,6 +21,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from .execution import RunResult, run_python_tests
 from .interview import prompts
 from .interview.feedback import FeedbackGenerator, FeedbackReport
 from .interview.tools import tools_for
@@ -32,6 +33,7 @@ log = logging.getLogger(__name__)
 
 State = Literal["idle", "connecting", "listening", "thinking", "speaking", "wrapping_up", "ended", "error"]
 Emit = Callable[[str, Any], Awaitable[None]]
+Runner = Callable[..., Awaitable[RunResult]]
 
 
 @dataclass(slots=True)
@@ -94,6 +96,9 @@ class InterviewSession:
         code_debounce: float = 1.0,
         max_minutes: int = 45,
         clock: Callable[[], float] = time.monotonic,
+        runner: Runner | None = run_python_tests,
+        run_timeout: float = 6.0,
+        max_runs: int = 60,
     ) -> None:
         self.id = uuid.uuid4().hex[:12]
         self.sid = sid
@@ -115,6 +120,17 @@ class InterviewSession:
         self.prompt_version = prompts.PROMPT_VERSION
         self.started_at: float | None = None
         self.wrap_up_reason: str | None = None
+        # Debug track: test runs. `runner` is None when code execution is disabled. The legacy
+        # server runs only the debug suites; swe tests run in the Vercel functions (execution/jobs.py).
+        self._runner = runner if track.can_run and problem.module_name and problem.test_code else None
+        self.run_timeout = run_timeout
+        self.max_runs = max_runs
+        self.run_count = 0
+        self.last_run: RunResult | None = None
+        self.last_run_code: str | None = None
+        self.last_run_at: float | None = None
+        self.final_run: RunResult | None = None
+        self._run_lock = asyncio.Lock()
 
         self._emit = emit
         self._pump_task: asyncio.Task[None] | None = None
@@ -142,6 +158,9 @@ class InterviewSession:
             "sessionId": self.id,
             "state": self.state,
             "track": self.track.id,
+            "surface": self.track.surface,
+            "languages": list(self.track.languages),
+            "canRun": self._runner is not None,
             "problem": self.problem.public(),
             "language": self.language,
             "inputSampleRate": self.backend.input_sample_rate,
@@ -196,6 +215,49 @@ class InterviewSession:
         await self.backend.send_context(
             f"[Candidate's current {self.language} code — for your reference, do not respond to this]\n{snapshot}"
         )
+
+    # ------------------------------------------------------------------ test runs
+    def seconds_since_last_run(self) -> float | None:
+        return None if self.last_run_at is None else self._clock() - self.last_run_at
+
+    async def _execute(self, code: str) -> RunResult:
+        assert self._runner is not None
+        return await self._runner(
+            code,
+            module_name=self.problem.module_name,
+            test_code=self.problem.test_code,
+            time_limit=self.run_timeout,
+        )
+
+    async def run_tests(self, code: str | None = None) -> dict[str, Any]:
+        """Candidate pressed Run tests. Returns the ack payload; also emits run_result."""
+        if self._runner is None:
+            return {"ok": False, "error": "Running code is not available for this interview."}
+        if self.state not in ("listening", "thinking", "speaking"):
+            return {"ok": False, "error": "The interview is not in progress."}
+        if self.run_count >= self.max_runs:
+            return {"ok": False, "error": f"Run limit reached ({self.max_runs} runs per interview)."}
+        if self._run_lock.locked():
+            return {"ok": False, "error": "A run is already in progress."}
+        async with self._run_lock:
+            if code is not None:
+                self.code = code
+            snapshot = self.code
+            self.run_count += 1
+            try:
+                result = await self._execute(snapshot)
+            except Exception as exc:  # noqa: BLE001
+                log.exception("session %s: test run failed", self.id)
+                return {"ok": False, "error": f"Could not run the tests: {exc}"}
+            self.last_run, self.last_run_code, self.last_run_at = result, snapshot, self._clock()
+        payload = {"run": self.run_count, **result.public()}
+        await self._emit("run_result", payload)
+        if self.state in ("listening", "thinking", "speaking"):
+            await self.backend.send_context(
+                f"[The candidate ran the test suite (run {self.run_count}) — for your reference; "
+                f"respond only if they ask or it fits the conversation]\n{result.summary()}"
+            )
+        return {"ok": True, "result": payload}
 
     async def begin_wrap_up(self, *, reason: str, via_tool: bool = False) -> bool:
         """Move to wrapping_up and ask the model for its closing turn.
@@ -271,6 +333,15 @@ class InterviewSession:
         self._ended.set()
 
     async def _generate_feedback(self) -> None:
+        test_summary: str | None = None
+        if self._runner is not None:
+            # Grade the code as it was left, whether or not the candidate ran it last.
+            try:
+                self.final_run = await self._execute(self.code)
+                test_summary = self.final_run.summary(max_failures=12)
+                await self._emit("final_tests", {"sessionId": self.id, **self.final_run.public()})
+            except Exception:  # noqa: BLE001
+                log.exception("session %s: final test run failed", self.id)
         if self.feedback_generator is None:
             return
         try:
@@ -279,6 +350,7 @@ class InterviewSession:
                 problem_text=self.problem.prompt_text(),
                 transcript=[t.public() for t in self.transcript],
                 code=self.code if self.track.surface == "editor" else None,
+                test_summary=test_summary,
             )
             await self._emit("feedback", {"sessionId": self.id, "report": self.report.model_dump()})
         except Exception as exc:  # noqa: BLE001

@@ -5,6 +5,7 @@ import { PcmPlayer } from './player';
 export class AudioEngine {
   private mic = new MicCapture();
   private player: PcmPlayer | null = null;
+  private muted = false;
 
   requestMic(): Promise<MicPermission> {
     return this.mic.requestPermission();
@@ -17,11 +18,26 @@ export class AudioEngine {
   ): Promise<void> {
     this.player = new PcmPlayer(outputRate);
     await this.player.resume();
-    await this.mic.start(inputRate, onFrame);
+    // Muted: drop the frames here too, so nothing reaches the interviewer even if the browser
+    // ignores track.enabled.
+    await this.mic.start(inputRate, (frame) => {
+      if (!this.muted) {
+        onFrame(frame);
+      }
+    });
   }
 
   play(pcm16: ArrayBuffer): void {
     this.player?.enqueue(pcm16);
+  }
+
+  get isMuted(): boolean {
+    return this.muted;
+  }
+
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    this.mic.setMuted(muted);
   }
 
   interrupt(): void {

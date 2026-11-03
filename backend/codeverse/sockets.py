@@ -4,12 +4,14 @@ Client -> server
     start_interview {track, problemId?, difficulty?, language?}
     audio_in        <bytes>   PCM16 mono at session.inputSampleRate
     code_update     {code, language?}
+    run_tests       {code?}   ack {ok, result | error}   (tracks with canRun)
     end_interview   {}
 Server -> client
     interview_started {session}          session_state {state, ...}
     audio_out <bytes>                    interrupted {}
     transcript_delta {role, text}        transcript_turn {role, text, t}
     tool_call {name, args, result}       feedback {sessionId, report}
+    run_result {run, passed, total, ...} final_tests {sessionId, passed, total, ...}
     interview_ended {sessionId, metrics} error {message}
 """
 
@@ -23,6 +25,7 @@ from typing import Any
 import socketio
 
 from .config import Settings
+from .execution import run_python_tests
 from .interview.feedback import FeedbackGenerator
 from .interview.tracks import get_track
 from .problems.bank import ProblemBank
@@ -107,6 +110,9 @@ def register_handlers(
             except LookupError as exc:
                 return {"ok": False, "error": str(exc)}
 
+        language = str(data.get("language") or "python")
+        if track.languages and language not in track.languages:
+            language = track.languages[0]
         session = InterviewSession(
             sid=sid,
             track=track,
@@ -114,10 +120,13 @@ def register_handlers(
             backend=backend_factory(),
             emit=emitter(sid),
             feedback=feedback_factory(),
-            language=str(data.get("language") or "python"),
+            language=language,
             voice=settings.live_voice,
             code_debounce=settings.code_context_debounce_seconds,
             max_minutes=settings.max_session_minutes,
+            runner=run_python_tests if settings.code_execution_enabled else None,
+            run_timeout=settings.code_run_timeout_seconds,
+            max_runs=settings.max_runs_per_session,
         )
         registry.by_sid[sid] = session
         log.info("session %s: %s / %s for %s", session.id, track.id, problem.id, sid)
@@ -138,6 +147,14 @@ def register_handlers(
         if session is None or not isinstance(data, dict):
             return
         await session.on_code(str(data.get("code") or ""), data.get("language"))
+
+    @sio.on("run_tests")
+    async def run_tests(sid: str, data: Any = None) -> dict[str, Any]:
+        session = registry.by_sid.get(sid)
+        if session is None:
+            return {"ok": False, "error": "No interview in progress."}
+        code = data.get("code") if isinstance(data, dict) else None
+        return await session.run_tests(str(code) if code is not None else None)
 
     @sio.on("end_interview")
     async def end_interview(sid: str, _data: Any = None) -> dict[str, Any]:

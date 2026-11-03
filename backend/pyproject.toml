@@ -11,6 +11,9 @@ dependencies = [
     "pydantic-settings>=2.3",
     "google-genai>=1.30",
     "python-dotenv>=1.0",
+    # Vercel functions (codeverse/web): Neon Postgres.
+    "psycopg[binary]>=3.2",
+    "vercel>=0.12.2",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +39,8 @@ packages = ["codeverse"]
 [tool.ruff]
 line-length = 110
 target-version = "py311"
+# Debug-track problems are deliberately buggy code.
+extend-exclude = ["codeverse/problems/debug"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "ASYNC"]

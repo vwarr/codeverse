@@ -1,15 +1,15 @@
 # Codeverse backend
 
-FastAPI + python-socketio service that runs interviews. See the repository README for the overview.
+This directory holds the Python code for Codeverse. See the repository README for the overview.
+
+- `codeverse/web/`, `interview/`, `problems/`, `execution/`: used by the Vercel functions in `/api`.
+- `codeverse/app.py`, `sockets.py`, `sessions.py`, `voice/`, `problems/api.py`, `Dockerfile`, `fly.toml`: the **legacy** FastAPI + Socket.IO server. The frontend does not use it.
 
 ```sh
 cd backend
-uv sync                      # or: pip install -e ".[dev]"
-cp .env.example .env         # set GEMINI_API_KEY
-uv run python -m codeverse   # http://localhost:5100
-uv run pytest                # tests use a fake voice backend; no network needed
+uv sync --extra dev
+uv run pytest                # no network: Gemini and Neon are faked
+uv run python -m codeverse   # legacy server only, http://localhost:5100
 ```
 
-Layout: `codeverse/sessions.py` (state machine), `codeverse/sockets.py` (Socket.IO events), `codeverse/voice/`
-(the `VoiceBackend` interface and its implementations), `codeverse/interview/` (tracks, prompts, tools,
-feedback), `codeverse/problems/` (bank + REST API).
+Settings come from environment variables and from `backend/.env` (see `.env.example`).

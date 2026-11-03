@@ -1,0 +1,22 @@
+{
+  "title": "Deploy Order",
+  "difficulty": "hard",
+  "module_name": "deploy",
+  "tags": ["python", "graphs", "caching", "nondeterminism"],
+  "statement": "**Incident follow-up — deploy daemon**\n\nThe deploy daemon decides what order to start services in. Three things have been reported, and nobody is sure whether they are related:\n\n1. Deploys *sometimes* fail because a service starts before something it depends on. Re-running the same deploy often works. Nobody can reproduce it on demand.\n2. Last week someone committed a config where two services depended on each other. The daemon did not raise an error; it just started them.\n3. The daemon is long-running. Ops say that after a partial redeploy (where some services were already up), the *next* full deploy sometimes doesn't start everything.\n\nThe code is `deploy.py` in the editor. Press **Run tests** to run the suite against your version. Find each root cause, fix it, and explain why the first one is intermittent.",
+  "constraints": [
+    "Python 3.11, standard library only",
+    "Keep the Resolver and plan_deploy signatures the same",
+    "A dependency cycle must raise CycleError"
+  ],
+  "bugs": [
+    "plan_deploy deduplicates with list(set(steps)). Sets are unordered and str hashes are randomised per process (PYTHONHASHSEED), so the start order changes between runs. That's why the failure is intermittent and goes away on retry. The fix is an order-preserving dedupe such as list(dict.fromkeys(steps)).",
+    "start_order only tracks 'visited', so meeting a node that is still on the current DFS path is treated as already done and a cycle is silently accepted. A second 'in progress' set (or three-colour marking) is needed to detect a back edge and raise CycleError.",
+    "start_order returns the cached list object itself, and plan_deploy mutates it with order.remove(...) for already-running services. The cache is corrupted for the rest of the process, so a later deploy is missing those services. The fix is to return a copy, or to have plan_deploy not mutate what it was given; ideally both."
+  ],
+  "hints": [
+    "For the intermittent failure: what in this file could give a different result on two runs with identical input?",
+    "For the cycle: during the depth-first search, what's the difference between a node you've finished and a node you're still inside?",
+    "For the long-running daemon: what happens to the list start_order returns after plan_deploy gets hold of it?"
+  ]
+}

@@ -1,33 +1,35 @@
-import { useEffect } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
-import {
-  Alert,
-  Box,
-  Button,
-  Center,
-  Group,
-  ScrollArea,
-  Stack,
-  Switch,
-  Text,
-  Title,
-  useMantineColorScheme,
-} from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Button, Text, Title, Tooltip } from '@mantine/core';
+import { AppHeader } from '../components/AppHeader';
 import { CodePane } from '../components/CodePane';
-import logo from '../components/icon.png';
-import { InterviewerAvatar } from '../components/InterviewerAvatar';
 import { ProblemPanel } from '../components/ProblemPanel';
-import { StatusBadge } from '../components/StatusBadge';
+import { TestResults } from '../components/TestResults';
 import { Transcript } from '../components/Transcript';
+import { DEMO } from '../lib/env';
+import { formatClock, isLive, secondsLeft, statusLine } from '../state/interview';
 import { useInterview } from '../state/InterviewProvider';
 
-const HEADER_H = 56;
+const WARN_SECONDS = 5 * 60;
+
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!active) {
+      return undefined;
+    }
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
 
 export function InterviewPage() {
   const navigate = useNavigate();
-  const { state, finish, sendCode } = useInterview();
-  const { colorScheme, toggleColorScheme } = useMantineColorScheme();
+  const { state, finish, sendCode, runTests, setMuted } = useInterview();
   const { session, status } = state;
+  const running = status !== 'ended' && status !== 'error' && status !== 'idle';
+  const now = useNow(running);
 
   useEffect(() => {
     if (status === 'ended') {
@@ -39,92 +41,137 @@ export function InterviewPage() {
     return <Navigate to="/" replace />;
   }
 
-  const isEditor = session.problem.track === 'swe';
-  const speaking = status === 'speaking' || (status === 'wrapping_up' && !!state.live.interviewer);
-  const canFinish = status !== 'ended' && status !== 'error' && status !== 'wrapping_up';
+  const live = isLive(status) && status !== 'wrapping_up' && !state.reconnecting;
+  const canFinish = running && status !== 'wrapping_up';
+  const left = secondsLeft(state, now);
+  const micOn = state.mic === 'on';
+  const fileName = session.problem.module_name
+    ? `${session.problem.module_name}.py`
+    : 'solution.py';
 
   return (
-    <Box style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Group
-        px="md"
-        justify="space-between"
-        style={{ height: HEADER_H, backgroundColor: '#2D3F93', color: 'white', flex: '0 0 auto' }}
-      >
-        <Group gap="sm">
-          <Link to="/">
-            <img src={logo} alt="codeverse" style={{ height: 32, display: 'block' }} />
-          </Link>
-          <Title order={4} c="white">
-            codeverse
-          </Title>
-        </Group>
-        <StatusBadge status={status} connected={state.connected} mic={state.mic} />
-        <Group gap="md">
-          <Switch
-            label="Dark"
-            checked={colorScheme === 'dark'}
-            onChange={toggleColorScheme}
-            styles={{ label: { color: 'white' } }}
-          />
+    <div className="cv-interview">
+      <AppHeader>
+        <Text role="status" size="sm" fw={500}>
+          {statusLine(state)}
+        </Text>
+        {left != null && (
+          <Text size="sm" c="dimmed" ff="monospace" aria-label={`Time left: ${formatClock(left)}`}>
+            {formatClock(left)} left
+          </Text>
+        )}
+        {micOn ? (
           <Button
+            variant="default"
             size="sm"
-            radius="xl"
-            variant="white"
-            color="dark"
-            onClick={finish}
-            disabled={!canFinish}
+            h={36}
+            aria-pressed={state.muted}
+            onClick={() => setMuted(!state.muted)}
           >
-            {status === 'wrapping_up' ? 'Wrapping up…' : 'Finish'}
+            {state.muted ? 'Unmute' : 'Mute'}
           </Button>
-        </Group>
-      </Group>
+        ) : (
+          // Same layout as a live interview; the demo (and a stopped mic) has nothing to mute.
+          <Tooltip label={DEMO ? 'The demo does not use the microphone' : 'The microphone is off'}>
+            <Button
+              variant="default"
+              size="sm"
+              h={36}
+              data-disabled
+              aria-disabled="true"
+              onClick={(e) => e.preventDefault()}
+            >
+              Mute
+            </Button>
+          </Tooltip>
+        )}
+        <Button size="sm" h={36} onClick={finish} disabled={!canFinish}>
+          {status === 'wrapping_up' ? 'Wrapping up…' : 'Finish'}
+        </Button>
+      </AppHeader>
 
-      {state.error && (
-        <Alert color="red" m="sm">
-          {state.error}
-        </Alert>
+      <div aria-live="polite">
+        {state.reconnecting && (
+          <div className="cv-banner" data-tone="alert">
+            The voice connection dropped. Reconnecting to the same interview; your code and the
+            transcript are kept.
+          </div>
+        )}
+        {status === 'wrapping_up' && state.wrapUpReason === 'interviewer' && (
+          <div className="cv-banner">
+            The interviewer has started the wrap-up. Listen to the summary; your written report
+            follows.
+          </div>
+        )}
+        {status === 'wrapping_up' && state.wrapUpReason === 'time_limit' && (
+          <div className="cv-banner">Time is up. The interviewer is wrapping up.</div>
+        )}
+        {left != null && left > 0 && left <= WARN_SECONDS && status !== 'wrapping_up' && (
+          <div className="cv-banner">
+            {Math.ceil(left / 60)} minutes left. The interviewer will start the wrap-up at 0:00.
+          </div>
+        )}
+        {state.muted && live && (
+          <div className="cv-banner">
+            Your microphone is muted. The interviewer cannot hear you.
+          </div>
+        )}
+      </div>
+      {(state.error || state.mic === 'denied' || state.mic === 'unsupported') && (
+        <div className="cv-banner" data-tone="alert" role="alert">
+          {state.error ??
+            'The microphone is not available. Allow it for this site in the browser settings.'}
+        </div>
       )}
 
-      {isEditor ? (
-        <Box
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: 'grid',
-            gridTemplateColumns: 'minmax(280px, 1fr) 2fr',
-          }}
+      <div className="cv-columns">
+        <section
+          aria-label={session.track === 'debug' ? 'Bug report' : 'Problem'}
+          className="cv-col cv-col-problem"
         >
-          <ScrollArea
-            p="md"
-            style={{ borderRight: '1px solid var(--mantine-color-default-border)' }}
-          >
-            <Stack gap="lg">
-              <ProblemPanel problem={session.problem} />
-              <div>
-                <Text fw={600} size="sm" mb={6}>
-                  Transcript
-                </Text>
-                <Transcript turns={state.transcript} live={state.live} height={260} />
-              </div>
-            </Stack>
-          </ScrollArea>
+          <ProblemPanel problem={session.problem} />
+        </section>
+
+        <section aria-label="Editor" className="cv-col cv-col-editor">
           <CodePane
-            initialLanguage={session.language}
             starterCode={session.problem.starter_code}
             onChange={sendCode}
+            fileName={fileName}
+            onRun={session.canRun ? (code) => void runTests(code) : undefined}
+            running={state.running}
+            runDisabled={!live}
           />
-        </Box>
-      ) : (
-        <Center style={{ flex: 1, minHeight: 0 }} p="md">
-          <Stack align="center" gap="lg" style={{ width: 'min(720px, 100%)' }}>
-            <InterviewerAvatar speaking={speaking} />
-            <Text fw={600}>{session.problem.title}</Text>
-            <Box style={{ width: '100%' }}>
-              <Transcript turns={state.transcript} live={state.live} height={300} />
-            </Box>
-          </Stack>
-        </Center>
-      )}
-    </Box>
+          <div className="cv-output" aria-live="polite">
+            <Title order={2} fz={13} mb={6}>
+              Output
+            </Title>
+            {session.canRun ? (
+              <TestResults
+                result={state.lastRun}
+                running={state.running}
+                error={state.runError}
+                emptyText={
+                  session.track === 'debug'
+                    ? 'Press Run tests to run the test suite against your code.'
+                    : 'Press Run tests to run the hidden test cases against your code.'
+                }
+              />
+            ) : (
+              <Text size="sm" c="dimmed">
+                This problem has no automatic tests. Walk the interviewer through an example
+                instead.
+              </Text>
+            )}
+          </div>
+        </section>
+
+        <section aria-label="Transcript" className="cv-col cv-col-transcript">
+          <Title order={2} fz={14} mb={20}>
+            Transcript
+          </Title>
+          <Transcript turns={state.transcript} live={state.live} follow />
+        </section>
+      </div>
+    </div>
   );
 }

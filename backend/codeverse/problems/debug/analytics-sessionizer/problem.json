@@ -1,0 +1,20 @@
+{
+  "title": "Analytics Sessionizer",
+  "difficulty": "medium",
+  "module_name": "sessionize",
+  "tags": ["python", "data-processing", "time-series"],
+  "statement": "**Bug report — analytics dashboard**\n\nProduct says the \"average session length\" number on the dashboard has looked wrong since we moved to multiple ingest workers:\n\n- Power users who are on the site all afternoon show up as dozens of short sessions instead of one long one.\n- A handful of sessions in last week's export have a **negative** duration.\n\nA session is supposed to be a run of one user's events with no gap longer than 30 minutes between consecutive events. The code is `sessionize.py` in the editor. Press **Run tests** to run the suite against your version. Find out what's wrong, fix it, and explain each cause.",
+  "constraints": [
+    "Python 3.11, standard library only",
+    "Events are not guaranteed to arrive in timestamp order",
+    "Keep sessionize() returning {user_id: [Session, ...]} in chronological order"
+  ],
+  "bugs": [
+    "The inactivity gap is measured from the session's START (ev.ts - current.start) instead of from the previous event (ev.ts - current.end). Any session longer than 30 minutes is split even when the user never went idle, which is the 'power users have dozens of short sessions' symptom.",
+    "Each user's events are processed in arrival order, but ingest is unordered. An earlier event arriving after a later one sets current.end backwards, giving negative durations, and pages come out of order. The fix is to sort each user's events by ts before grouping."
+  ],
+  "hints": [
+    "Write down what the code compares against SESSION_GAP, then compare it with the definition in the report.",
+    "The report says the problem started when ingest moved to multiple workers. What does that change about the input?"
+  ]
+}

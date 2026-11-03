@@ -1,0 +1,395 @@
+/* Design language: one quiet surface, hairline borders, no shadows, one accent.
+   Colours and fonts come from the Mantine theme (src/theme.ts); this file only sets the page
+   chrome and the layout that Mantine components do not cover. */
+
+:root {
+  --cv-bg: #f6f6f4;
+  --cv-surface: #fff;
+  --cv-surface-muted: #ecece8;
+  --cv-text: #1a1a19;
+  --cv-muted: #5e5e5a;
+  --cv-border: #dadad5;
+  --cv-border-strong: #b9b9b3;
+  --cv-accent: #c2410c;
+  --cv-ink-hover: #3a3a38;
+}
+
+/* Mantine sets these per colour scheme, so override them at the same specificity. */
+:root[data-mantine-color-scheme='light'] {
+  --mantine-color-body: var(--cv-bg);
+  --mantine-color-text: var(--cv-text);
+  --mantine-color-dimmed: var(--cv-muted);
+  --mantine-color-placeholder: var(--cv-muted);
+  --mantine-color-default-border: var(--cv-border-strong);
+  --mantine-color-error: var(--cv-accent);
+}
+
+/* Field labels match the fieldset legends. */
+.cv-label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.cv-description {
+  margin-top: -4px;
+  margin-bottom: 8px;
+}
+
+/* Radio rings need 3:1 against the page (WCAG 1.4.11). */
+.cv-radio:not(:checked) {
+  border-color: #8a8a85;
+  background: var(--cv-surface);
+}
+
+body {
+  margin: 0;
+  background: var(--cv-bg);
+  color: var(--cv-text);
+}
+
+/* Visible focus for keyboard users on every control. */
+:focus-visible,
+.mantine-focus-auto:focus-visible {
+  outline: 2px solid var(--cv-text);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--cv-text);
+}
+
+a:hover {
+  color: var(--cv-muted);
+}
+
+.cv-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Buttons: dark primary, outline secondary. */
+.cv-button[data-variant='filled']:not(:disabled, [data-disabled]):hover {
+  background: var(--cv-ink-hover);
+}
+
+.cv-button[data-variant='default'] {
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-border-strong);
+  color: var(--cv-text);
+}
+
+.cv-button[data-variant='default']:not(:disabled, [data-disabled]):hover {
+  background: var(--cv-surface-muted);
+}
+
+.cv-code {
+  background: var(--cv-surface-muted);
+  color: var(--cv-text);
+  border-radius: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Header shared by every page. */
+.cv-header {
+  border-bottom: 1px solid var(--cv-border);
+}
+
+.cv-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 12px 24px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.cv-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.cv-header-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Start page. */
+.cv-start {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+  box-sizing: border-box;
+}
+
+.cv-start-form {
+  max-width: 660px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.cv-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.cv-legend {
+  padding: 0;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cv-track-list {
+  border: 1px solid var(--cv-border);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cv-track-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.cv-track-row + .cv-track-row {
+  border-top: 1px solid var(--cv-border);
+}
+
+.cv-track-row:hover,
+.cv-track-row[data-checked] {
+  background: var(--cv-surface);
+}
+
+.cv-difficulty {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+/* Interview page: problem | editor + output | transcript. */
+.cv-interview {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.cv-columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr) minmax(280px, 360px);
+}
+
+.cv-col {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.cv-col-problem {
+  border-right: 1px solid var(--cv-border);
+  padding: 24px 24px 32px;
+}
+
+.cv-col-editor {
+  display: flex;
+  flex-direction: column;
+  background: var(--cv-surface);
+  overflow: hidden;
+}
+
+.cv-col-transcript {
+  border-left: 1px solid var(--cv-border);
+  padding: 24px 20px;
+}
+
+.cv-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px 8px 16px;
+  border-bottom: 1px solid var(--cv-border);
+}
+
+.cv-output {
+  border-top: 1px solid var(--cv-border);
+  padding: 10px 16px 14px;
+  min-height: 96px;
+  max-height: 38vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.cv-banner {
+  border-bottom: 1px solid var(--cv-border);
+  padding: 10px 24px;
+  font-size: 14px;
+  background: var(--cv-surface);
+}
+
+.cv-banner[data-tone='alert'] {
+  border-left: 3px solid var(--cv-accent);
+}
+
+@media (width <= 1100px) {
+  .cv-columns {
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  }
+
+  .cv-col-transcript {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid var(--cv-border);
+    max-height: 40vh;
+  }
+}
+
+@media (width <= 720px) {
+  .cv-interview {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .cv-columns {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cv-col-problem {
+    border-right: 0;
+  }
+
+  .cv-col-editor {
+    min-height: 480px;
+  }
+}
+
+/* Report and History pages. */
+.cv-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.cv-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cv-section-rule {
+  border-top: 1px solid var(--cv-border);
+  padding-top: 28px;
+}
+
+.cv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.cv-table th,
+.cv-table td {
+  padding: 10px 12px 10px 0;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--cv-border);
+}
+
+.cv-table tr:last-child td {
+  border-bottom: 1px solid var(--cv-border);
+}
+
+.cv-table th {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cv-muted);
+  border-top: 0;
+}
+
+.cv-table .cv-num {
+  text-align: right;
+  padding-right: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cv-two-col {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px 48px;
+}
+
+.cv-two-col > * {
+  flex: 1 1 280px;
+}
+
+.cv-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cv-speaker {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cv-speaker[data-role='interviewer'] {
+  color: var(--cv-accent);
+}
+
+.cv-mono {
+  font-family: var(--mantine-font-family-monospace);
+}
+
+.cv-table .cv-dim-name {
+  width: 32%;
+}
+
+.cv-pre,
+.cv-code {
+  white-space: pre-wrap;
+}
+
+/* Disabled: no fill, a light border and faint text, so it never looks like the white
+   secondary button. (Disabled controls are exempt from the 4.5:1 text rule.) */
+.cv-button:disabled,
+.cv-button[data-disabled],
+.cv-button[data-variant='default']:disabled,
+.cv-button[data-variant='default'][data-disabled] {
+  background: transparent;
+  border: 1px solid var(--cv-border);
+  color: #8a8a85;
+  cursor: not-allowed;
+}

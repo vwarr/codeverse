@@ -65,7 +65,7 @@ class SocketHandlerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(res["ok"], res)
         self.assertEqual(res["session"]["problem"]["id"], "two-sum")
-        self.assertEqual(res["session"]["language"], "javascript")
+        self.assertEqual(res["session"]["language"], "python")  # both tracks are Python only
         started = self.sio.of("interview_started", "s1")
         self.assertEqual(started[0]["session"]["track"], "swe")
         self.assertTrue(self.backends[0].started)
@@ -80,20 +80,43 @@ class SocketHandlerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_rejects_wrong_track_problem_and_unknown_track(self) -> None:
         await self.connect("s1")
-        res = await self.h["start_interview"]("s1", {"track": "ib", "problemId": "two-sum"})
+        res = await self.h["start_interview"]("s1", {"track": "debug", "problemId": "two-sum"})
         self.assertFalse(res["ok"])
         res = await self.h["start_interview"]("s1", {"track": "pm"})
         self.assertFalse(res["ok"])
         self.assertNotIn("s1", self.registry.by_sid)
 
+    async def test_debug_run_tests_event(self) -> None:
+        await self.connect("s1")
+        res = await self.h["start_interview"](
+            "s1", {"track": "debug", "problemId": "shopping-cart-leak", "language": "javascript"}
+        )
+        self.assertTrue(res["ok"], res)
+        self.assertEqual(res["session"]["language"], "python")  # debug is Python only
+        self.assertTrue(res["session"]["canRun"])
+        session = self.registry.by_sid["s1"]
+        await self.backends[0].speak("Hi")
+        for _ in range(5):
+            await asyncio.sleep(0)
+        ack = await self.h["run_tests"]("s1", {"code": session.problem.reference_solution})
+        self.assertTrue(ack["ok"], ack)
+        self.assertTrue(ack["result"]["ok"])
+        self.assertEqual(len(self.sio.of("run_result", "s1")), 1)
+        await session.close()
+
+    async def test_run_tests_without_interview(self) -> None:
+        await self.connect("s1")
+        ack = await self.h["run_tests"]("s1", {"code": "x = 1"})
+        self.assertFalse(ack["ok"])
+
     async def test_one_interview_per_connection_and_per_ip_cap(self) -> None:
         await self.connect("s1")
         await self.connect("s2")  # same IP
-        ok = await self.h["start_interview"]("s1", {"track": "quant"})
+        ok = await self.h["start_interview"]("s1", {"track": "swe"})
         self.assertTrue(ok["ok"])
-        dup = await self.h["start_interview"]("s1", {"track": "quant"})
+        dup = await self.h["start_interview"]("s1", {"track": "swe"})
         self.assertFalse(dup["ok"])
-        capped = await self.h["start_interview"]("s2", {"track": "quant"})
+        capped = await self.h["start_interview"]("s2", {"track": "swe"})
         self.assertIn("Too many", capped["error"])
         await self.registry.by_sid["s1"].close()
 
@@ -130,7 +153,7 @@ class SocketHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.sio.of("feedback", "s1"))
         self.assertTrue(self.sio.of("interview_ended", "s1"))
         # can start again on the same connection
-        res = await self.h["start_interview"]("s1", {"track": "ib"})
+        res = await self.h["start_interview"]("s1", {"track": "swe"})
         self.assertTrue(res["ok"])
         await self.registry.by_sid["s1"].close()
 
