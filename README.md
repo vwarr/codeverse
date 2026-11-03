@@ -139,6 +139,7 @@ All settings are environment variables (see `backend/.env.example`). Model IDs a
 | `GEMINI_API_KEY` | — | Mints tokens and writes reports. Never sent to the browser. |
 | `GEMINI_LIVE_MODEL` | `gemini-3.8-live` | The Live model. The token locks it. |
 | `GEMINI_TEXT_MODEL` | `gemini-3.6-flash` | The model that writes the report. |
+| `GEMINI_TEXT_FALLBACK_MODELS` | `gemini-3.8-flash,gemini-3.5-flash-lite` | Comma list of report models tried in order when the main one is rate limited or out of quota. The saved report records which model wrote it (`model`). |
 | `GEMINI_LIVE_API_VERSION` | `v1beta` | API version for tokens and the browser connection. Google's docs say that tokens work only with `v1beta`. |
 | `LIVE_VOICE` | `Kore` | The interviewer voice. |
 | `DATABASE_URL` | — | Neon Postgres (pooled connection string). |

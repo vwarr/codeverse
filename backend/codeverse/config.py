@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Model IDs drift; keep every one of them here and nowhere else.
     gemini_live_model: str = "gemini-3.8-live"
     gemini_text_model: str = "gemini-3.6-flash"
+    # Comma list. The report tries gemini_text_model, then each of these in order, but only when a
+    # model is rate limited or out of quota (each model has its own free-tier quota).
+    gemini_text_fallback_models: str = "gemini-3.8-flash,gemini-3.5-flash-lite"
     live_voice: str = "Kore"
     # API version for ephemeral tokens and the browser's Live connection. Google's ephemeral-token
     # docs say tokens work "only with the v1beta version of the API".
@@ -46,6 +49,12 @@ class Settings(BaseSettings):
     code_runner: CodeRunnerName = "sandbox"
     code_run_timeout_seconds: float = 6.0
     max_runs_per_session: int = 20
+
+    @property
+    def text_models(self) -> list[str]:
+        """The report models to try, in order: the main one, then the fallbacks, without repeats."""
+        models = [self.gemini_text_model, *self.gemini_text_fallback_models.split(",")]
+        return list(dict.fromkeys(m.strip() for m in models if m.strip()))
 
 
 @lru_cache

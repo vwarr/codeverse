@@ -3,9 +3,7 @@
 Each fixture in evals/fixtures/ is a synthetic interview (transcript, final code, expected score
 bands). The script builds the report the way /api/report does: the same prompt builder and
 generator, and for tracks that grade the final run (debug) a real test run of the fixture code.
-The model is chosen with --model (or EVAL_GEMINI_MODEL). The production model is refused unless
---allow-production-model is given: on a free key the eval would use up the daily quota that
-production reports need. It runs every case several times and checks:
+It runs every case --runs times and checks:
 
 - the overall score is inside the expected band, and per-dimension scores inside theirs;
 - the overall score varies by at most one point across runs;
@@ -13,13 +11,23 @@ production reports need. It runs every case several times and checks:
 
 Usage (from backend/; reads GEMINI_API_KEY from backend/.env):
 
-    uv run python evals/score_calibration.py --model <model>                # all cases, 3 runs each
-    uv run python evals/score_calibration.py --model <model> --runs 1 --case swe-strong
+    uv run python evals/score_calibration.py                         # 8 cases x 1 run on gemini-3.8-flash
+    uv run python evals/score_calibration.py --runs 3 --max-calls 30 # variance check: 24 calls
+    uv run python evals/score_calibration.py --case swe-strong --case swe-poor
 
-Costs one text-model call per case per run (8 cases x 3 runs = 24 calls), plus retries after a
-per-minute 429. A per-day 429 stops the run at once. Each report is appended to a JSONL file in
-evals/results/ (git-ignored) as soon as it arrives, so an interrupted run keeps what it got.
-Exits 1 if any check fails.
+Quota. Free-tier quotas are per model and per day (gemini-3.6-flash and gemini-3.8-flash: 20 a
+day, 5 a minute), and the key is shared with production. So the default model is
+gemini-3.8-flash, not the production report model (GEMINI_TEXT_MODEL, gemini-3.6-flash), and every
+API request, retries included, counts against --max-calls (default 12). The planned call count
+(cases x runs) is printed before any call, and a run that would exceed the budget is refused.
+Calibrating the production model itself means `--model gemini-3.6-flash` with a small budget, for
+example `--case swe-mediocre --max-calls 3`: every call there comes out of the 20 a day that
+production reports need. gemini-3.8-flash is also the first production fallback, so a large eval
+run on it shrinks that fallback for the day too.
+
+A per-day 429 stops the run at once. Each report is appended to a JSONL file in evals/results/
+(git-ignored) as soon as it arrives, so an interrupted run keeps what it got. Exits 1 if any check
+fails.
 """
 
 from __future__ import annotations
@@ -47,9 +55,26 @@ FIXTURES = HERE / "fixtures"
 RESULTS = HERE / "results"
 RETRY_DELAYS = (20.0, 60.0)
 MAX_OVERALL_SPREAD = 1
+DEFAULT_MODEL = "gemini-3.8-flash"
 
 
-class DailyQuotaExhausted(Exception):
+class CallBudget:
+    """Every API request, retries included, takes one call; past the cap the run stops."""
+
+    def __init__(self, cap: int) -> None:
+        self.cap, self.used = cap, 0
+
+    def take(self) -> None:
+        if self.used >= self.cap:
+            raise BudgetExhausted(f"call budget of {self.cap} used up")
+        self.used += 1
+
+
+class BudgetExhausted(Exception):
+    pass
+
+
+class DailyQuotaExhausted(BudgetExhausted):
     """A per-day 429. The key may be shared with production, so the eval stops at once."""
 
 
@@ -151,11 +176,12 @@ async def final_run_summary(fixture: dict[str, Any]) -> tuple[str | None, str]:
 
 
 async def generate(
-    gen: GeminiFeedbackGenerator, fixture: dict[str, Any], summary: str | None
+    gen: GeminiFeedbackGenerator, fixture: dict[str, Any], summary: str | None, budget: CallBudget
 ) -> FeedbackReport:
     problem = get_bank().get(fixture["problem_id"])
     assert problem is not None
     for attempt in range(len(RETRY_DELAYS) + 1):
+        budget.take()
         try:
             return await gen.generate(
                 track_id=fixture["track"],
@@ -179,7 +205,13 @@ async def generate(
 
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--runs", type=int, default=3, help="runs per case (default 3)")
+    parser.add_argument("--runs", type=int, default=1, help="runs per case (default 1)")
+    parser.add_argument(
+        "--max-calls",
+        type=int,
+        default=12,
+        help="most API requests to make, retries included (default 12)",
+    )
     parser.add_argument("--case", action="append", help="run only this case (repeatable)")
     parser.add_argument("--concurrency", type=int, default=2, help="parallel model calls (default 2)")
     parser.add_argument(
@@ -190,13 +222,8 @@ async def main() -> int:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("EVAL_GEMINI_MODEL"),
-        help="text model to grade with (default: $EVAL_GEMINI_MODEL); required",
-    )
-    parser.add_argument(
-        "--allow-production-model",
-        action="store_true",
-        help="allow --model to be the production report model (shares its daily quota)",
+        default=os.environ.get("EVAL_GEMINI_MODEL") or DEFAULT_MODEL,
+        help=f"text model to grade with (default: $EVAL_GEMINI_MODEL or {DEFAULT_MODEL})",
     )
     args = parser.parse_args()
 
@@ -205,15 +232,18 @@ async def main() -> int:
         raise SystemExit("GEMINI_API_KEY is not set (backend/.env)")
     from google import genai
 
-    if not args.model:
-        raise SystemExit("choose a model with --model or EVAL_GEMINI_MODEL")
-    if args.model == settings.gemini_text_model and not args.allow_production_model:
-        raise SystemExit(
-            f"{args.model} is the production report model; the eval would use its daily quota. "
-            "Pick another model or pass --allow-production-model."
-        )
-    gen = GeminiFeedbackGenerator(genai.Client(api_key=settings.gemini_api_key), args.model)
     fixtures = load_fixtures(args.case)
+    planned = len(fixtures) * args.runs
+    print(
+        f"plan: {len(fixtures)} case(s) x {args.runs} run(s) = {planned} call(s) on {args.model}, "
+        f"budget {args.max_calls} (retries count)"
+    )
+    if args.model == settings.gemini_text_model:
+        print(f"warning: {args.model} is the production report model; these calls use its daily quota")
+    if planned > args.max_calls:
+        raise SystemExit(f"{planned} planned calls exceed --max-calls {args.max_calls}; no calls made")
+    budget = CallBudget(args.max_calls)
+    gen = GeminiFeedbackGenerator(genai.Client(api_key=settings.gemini_api_key), args.model)
     summaries = {}
     for f in fixtures:
         summaries[f["name"]] = await final_run_summary(f)
@@ -232,13 +262,15 @@ async def main() -> int:
             async with pace:  # space out call starts to stay under the per-minute quota
                 await asyncio.sleep(args.interval if run or fixture is not fixtures[0] else 0)
             if stop.is_set():
-                return fixture["name"], run, "skipped: daily quota exhausted"
+                return fixture["name"], run, "skipped: run stopped (budget or daily quota)"
             try:
-                report: FeedbackReport | str = await generate(gen, fixture, summaries[fixture["name"]][0])
-            except DailyQuotaExhausted as exc:
+                report: FeedbackReport | str = await generate(
+                    gen, fixture, summaries[fixture["name"]][0], budget
+                )
+            except BudgetExhausted as exc:
                 stop.set()
-                print(f"DAILY QUOTA EXHAUSTED, stopping: {exc}", file=sys.stderr)
-                report = "error: daily quota exhausted"
+                print(f"STOPPING: {exc}", file=sys.stderr)
+                report = f"error: {str(exc)[:120]}"
             except Exception as exc:  # noqa: BLE001
                 report = f"error: {str(exc)[:200]}"
             score = report if isinstance(report, str) else f"overall {report.overall_score}"
@@ -303,6 +335,7 @@ async def main() -> int:
     summary_path = out.with_suffix(".summary.json")
     summary_path.write_text(json.dumps(saved, indent=2))
     print(f"summary: {summary_path}")
+    print(f"API requests made: {budget.used} of {budget.cap}")
     print("RESULT:", "FAIL" if failed else "PASS")
     return 1 if failed else 0
 

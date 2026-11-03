@@ -75,7 +75,7 @@ def make_deps(**settings: Any) -> tuple[Deps, MemoryStore, FakeMinter, StaticFee
         settings=config,
         store=store,
         mint_token=minter,
-        feedback=lambda: feedback,
+        feedback=lambda _model: feedback,
         bank=get_bank(),
         runner=FakeRunner() if config.code_execution_enabled else None,
         now=clock,
@@ -194,7 +194,7 @@ def test_report_frees_the_per_ip_slot_even_when_it_fails() -> None:
     assert status == 200 and store.sessions[sid].ended_at is not None
     # A connection lost mid-interview whose report then fails still ends the session.
     sid = start(deps)["session"]["sessionId"]
-    deps.feedback = lambda: Flaky(5, RuntimeError("model down"))
+    deps.feedback = lambda _model: Flaky(5, RuntimeError("model down"))
     body = {"sessionId": sid, "transcript": TRANSCRIPT, "endReason": "connection_lost"}
     assert call(service.create_report, deps, body=body)[0] == 502
     assert store.sessions[sid].ended_at is not None
@@ -370,7 +370,7 @@ class QuotaError(Exception):
 def test_report_retries_a_rate_limit() -> None:
     deps, store, *_ = make_deps(report_retry_delays=[1, 1])
     flaky = Flaky(2, QuotaError("429 RESOURCE_EXHAUSTED. quota"))
-    deps.feedback = lambda: flaky
+    deps.feedback = lambda _model: flaky
     sid = start(deps, track="swe")["session"]["sessionId"]
     status, data = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
     assert status == 200 and data["ok"] and flaky.calls == 3
@@ -378,9 +378,9 @@ def test_report_retries_a_rate_limit() -> None:
 
 
 def test_report_failure_keeps_the_transcript_and_can_be_retried() -> None:
-    deps, store, *_ = make_deps(report_retry_delays=[1])
+    deps, store, *_ = make_deps(report_retry_delays=[1], gemini_text_fallback_models="")
     flaky = Flaky(2, QuotaError("429 RESOURCE_EXHAUSTED. quota"))
-    deps.feedback = lambda: flaky
+    deps.feedback = lambda _model: flaky
     sid = start(deps, track="swe")["session"]["sessionId"]
     body = {"sessionId": sid, "transcript": TRANSCRIPT, "code": "x", "endReason": "quota"}
     status, data = call(service.create_report, deps, body=body)
@@ -403,7 +403,7 @@ def test_report_failure_keeps_the_transcript_and_can_be_retried() -> None:
 def test_report_does_not_retry_a_permanent_error() -> None:
     deps, store, *_ = make_deps()
     flaky = Flaky(5, RuntimeError("model down"))
-    deps.feedback = lambda: flaky
+    deps.feedback = lambda _model: flaky
     sid = start(deps, track="swe")["session"]["sessionId"]
     status, data = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
     assert status == 502 and flaky.calls == 1 and store.reports[sid]["status"] == "failed"
@@ -746,3 +746,69 @@ def test_client_ip_falls_back_in_order() -> None:
     assert client_ip({"x-forwarded-for": " 198.51.100.9 , 10.0.0.1"}, "127.0.0.1") == "198.51.100.9"
     # Empty headers are skipped, then the socket address is used.
     assert client_ip({"x-vercel-forwarded-for": " ", "x-real-ip": ""}, "127.0.0.1") == "127.0.0.1"
+
+
+# ---------------------------------------------------------------------- report model fallback
+class PerModel:
+    """Report generators by model name; models in `exhausted` always raise `error` (a 429 by default)."""
+
+    def __init__(self, exhausted: set[str], error: Exception | None = None) -> None:
+        self.exhausted, self.error = exhausted, error or QuotaError("429 RESOURCE_EXHAUSTED")
+        self.asked: list[str] = []
+
+    def __call__(self, model: str) -> Any:
+        self.asked.append(model)
+        return Flaky(1_000 if model in self.exhausted else 0, self.error)
+
+
+def test_report_falls_back_to_the_next_model_on_quota_errors() -> None:
+    deps, store, *_ = make_deps(
+        gemini_text_model="main", gemini_text_fallback_models="spare-a, spare-b", report_retry_delays=[1]
+    )
+    models = PerModel(exhausted={"main", "spare-a"})
+    deps.feedback = models
+    sid = start(deps, track="swe")["session"]["sessionId"]
+    status, data = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
+    assert status == 200 and data["ok"] and "model" not in data  # nothing new for the UI
+    # Each model gets its retries before the next one is tried.
+    assert models.asked == ["main", "main", "spare-a", "spare-a", "spare-b"]
+    assert store.reports[sid]["model"] == "spare-b" and store.reports[sid]["status"] == "complete"
+
+
+def test_report_records_the_main_model_and_skips_fallbacks_when_it_works() -> None:
+    deps, store, *_ = make_deps(gemini_text_model="main", gemini_text_fallback_models="spare")
+    models = PerModel(exhausted=set())
+    deps.feedback = models
+    sid = start(deps, track="swe")["session"]["sessionId"]
+    assert call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})[0] == 200
+    assert models.asked == ["main"] and store.reports[sid]["model"] == "main"
+
+
+def test_report_does_not_fall_back_on_other_errors() -> None:
+    deps, store, *_ = make_deps(gemini_text_model="main", gemini_text_fallback_models="spare")
+    models = PerModel(exhausted={"main"}, error=RuntimeError("bad request"))
+    deps.feedback = models
+    sid = start(deps, track="swe")["session"]["sessionId"]
+    status, _ = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
+    assert status == 502 and models.asked == ["main"] and store.reports[sid]["model"] is None
+
+
+def test_report_fails_with_503_when_every_model_is_out_of_quota() -> None:
+    deps, store, *_ = make_deps(
+        gemini_text_model="main", gemini_text_fallback_models="spare", report_retry_delays=[]
+    )
+    models = PerModel(exhausted={"main", "spare"})
+    deps.feedback = models
+    sid = start(deps, track="swe")["session"]["sessionId"]
+    status, data = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
+    assert status == 503 and "rate limit" in data["error"] and models.asked == ["main", "spare"]
+    assert store.reports[sid]["status"] == "failed"
+
+
+def test_text_models_setting_parses_the_comma_list() -> None:
+    s = Settings(_env_file=None, gemini_text_model="a", gemini_text_fallback_models=" b, ,a,c ")
+    assert s.text_models == ["a", "b", "c"]
+    only_main = Settings(_env_file=None, gemini_text_fallback_models="")
+    assert only_main.text_models == [only_main.gemini_text_model]
+    default = Settings.model_fields["gemini_text_fallback_models"].default
+    assert default == "gemini-3.8-flash,gemini-3.5-flash-lite"

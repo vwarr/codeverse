@@ -58,7 +58,7 @@ class Deps:
     settings: Settings
     store: Store
     mint_token: TokenMinter
-    feedback: Callable[[], FeedbackGenerator]
+    feedback: Callable[[str], FeedbackGenerator]  # model name -> report generator
     bank: ProblemBank = field(default_factory=get_bank)
     runner: CodeRunner | None = None  # None: running candidate code is off
     now: Callable[[], dt.datetime] = lambda: dt.datetime.now(dt.UTC)
@@ -286,17 +286,31 @@ def is_transient(exc: BaseException) -> bool:
     return is_rate_limited(exc) or code in (500, 502, 503, 504) or "UNAVAILABLE" in str(exc)
 
 
-async def _generate_with_retry(deps: Deps, **kwargs: Any) -> Any:
+async def _generate_with_retry(deps: Deps, model: str, **kwargs: Any) -> Any:
     """Retry rate limits and overloads a few times; the function has minutes, not seconds."""
     delays = deps.settings.report_retry_delays
     for attempt in range(len(delays) + 1):
         try:
-            return await deps.feedback().generate(**kwargs)
+            return await deps.feedback(model).generate(**kwargs)
         except Exception as exc:  # noqa: BLE001
             if attempt == len(delays) or not is_transient(exc):
                 raise
             log.warning("report generation failed (%s); retrying in %ss", exc, delays[attempt])
             await deps.sleep(delays[attempt])
+    raise AssertionError("unreachable")
+
+
+async def _generate_report(deps: Deps, **kwargs: Any) -> tuple[Any, str]:
+    """(report, model that wrote it). Tries each text model in turn, moving on only when one is
+    still rate limited or out of quota after its retries; any other error is raised at once."""
+    models = deps.settings.text_models
+    for i, model in enumerate(models):
+        try:
+            return await _generate_with_retry(deps, model, **kwargs), model
+        except Exception as exc:  # noqa: BLE001
+            if i == len(models) - 1 or not is_rate_limited(exc):
+                raise
+            log.warning("report model %s is rate limited (%s); falling back to %s", model, exc, models[i + 1])
     raise AssertionError("unreachable")
 
 
@@ -344,6 +358,7 @@ async def _create_report(row: SessionRow, req: Request, deps: Deps) -> dict[str,
         "metrics": metrics,
         "endReason": req.body.get("endReason") if isinstance(req.body.get("endReason"), str) else None,
         "finalRun": None,
+        "model": None,  # the text model that wrote the report (fallbacks may differ from the main one)
         "report": None,
         "error": None,
     }
@@ -361,7 +376,7 @@ async def _create_report(row: SessionRow, req: Request, deps: Deps) -> dict[str,
             log.exception("session %s: final test run failed", row.id)
 
     try:
-        report = await _generate_with_retry(
+        report, model = await _generate_report(
             deps,
             track_id=track.id,
             problem_text=problem.prompt_text(),
@@ -380,7 +395,7 @@ async def _create_report(row: SessionRow, req: Request, deps: Deps) -> dict[str,
             f"Could not write the feedback report ({reason}). Your transcript is saved; try again later.",
         ) from exc
 
-    record.update(status="complete", report=report.model_dump())
+    record.update(status="complete", model=model, report=report.model_dump())
     deps.store.save_report(row.id, record)
     return {"ok": True, "report": record["report"], "finalRun": record["finalRun"]}
 
@@ -477,5 +492,5 @@ def default_deps() -> Deps:
         store=PostgresStore(settings.database_url),
         runner=make_runner(settings),
         mint_token=mint_token,
-        feedback=lambda: GeminiFeedbackGenerator(client(), settings.gemini_text_model),
+        feedback=lambda model: GeminiFeedbackGenerator(client(), model),
     )
