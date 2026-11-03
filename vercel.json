@@ -4,7 +4,7 @@
   "functions": {
     "api/**/*.py": {
       "includeFiles": "backend/codeverse/**",
-      "excludeFiles": "{node_modules/**,.yarn/**,src/**,dist/**,design/**,test-utils/**,public/**,backend/tests/**,backend/.venv/**,backend/audio_files/**,backend/*.log,**/__pycache__/**,**/.pytest_cache/**,**/.ruff_cache/**,*.lock,package-lock.json}"
+      "excludeFiles": "{node_modules/**,.yarn/**,src/**,dist/**,design/**,test-utils/**,public/**,backend/tests/**,backend/.venv/**,backend/*.log,**/__pycache__/**,**/.pytest_cache/**,**/.ruff_cache/**,*.lock,package-lock.json}"
     }
   },
   "rewrites": [

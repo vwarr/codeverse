@@ -2,7 +2,7 @@
 
 The report is produced by a text model from the transcript, final code and rubric, using a JSON
 response schema so the UI can render it field by field. `FeedbackGenerator` is a protocol so tests
-(and the fake voice backend) can use a stub.
+can use a stub.
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ class GeminiFeedbackGenerator:
 
 
 class StaticFeedbackGenerator:
-    """Used with the fake voice backend and in tests."""
+    """A fixed report, for tests."""
 
     def __init__(self, report: FeedbackReport | None = None) -> None:
         self.report = report or FeedbackReport(

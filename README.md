@@ -86,7 +86,7 @@ To work on the UI without the API or Gemini, run `VITE_DEMO=1 npm run dev`. Demo
 
 ```sh
 cd backend && uv run pytest      # functions (token, run_tests, report) with a fake Gemini and an in-memory store,
-                                 # problem bank, runner, and the legacy server
+                                 # problem bank and runner
 npm test                         # typecheck, prettier, eslint, stylelint, vitest (incl. LiveInterview), build
 ```
 
@@ -155,7 +155,6 @@ backend/codeverse/
   interview/    tracks.py · prompts.py · tools.py · feedback.py
   problems/     bank.json · bank.py · debug/<problem>/{problem.json,buggy.py,fixed.py,test_*.py}
   execution/    jobs.py (TestJob, CodeRunner, job_for) · sandbox.py (Vercel Sandbox) · runner.py (local) · _harness.py
-  app.py, sockets.py, sessions.py, voice/, problems/api.py    legacy server (see below)
 src/
   lib/          api.ts · transport.ts · types.ts · live/{LiveInterview,connector}.ts · audio/{capture,player,engine}.ts
   state/        interview.ts (reducer) · InterviewProvider.tsx
@@ -165,13 +164,9 @@ src/
   theme.ts · global.css     design tokens and layout
 ```
 
-### Legacy server
-
-The FastAPI + Socket.IO server (`backend/codeverse/app.py`, `sockets.py`, `sessions.py`, `voice/`, `Dockerfile`, `fly.toml`) is legacy. The frontend does not use it. It still runs (`cd backend && uv run python -m codeverse`), and its tests still pass. It may be deleted later.
-
 ## Roadmap
 
 - Tests for the software-engineering problems that have none (linked lists, LRU cache and others)
 - Trends per rubric dimension on the History page
-- A second `VoiceBackend`: browser audio → server VAD → Whisper → text model → streaming TTS, to benchmark against Live
+- A second voice path: browser audio → server VAD → Whisper → text model → streaming TTS, to benchmark against Live
 - More problems, interviewer personas, a system-design track

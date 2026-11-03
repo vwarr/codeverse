@@ -1,4 +1,4 @@
-// Demo mode: an in-browser stand-in for the Socket.IO backend, used when the app is built with
+// Demo mode: an in-browser stand-in for LiveInterview and the API, used when the app is built with
 // VITE_DEMO=1 (e.g. for a static host with no backend). It plays a scripted interview, voices the
 // interviewer with the browser's speechSynthesis, returns precomputed test runs for the debugging
 // track and a canned feedback report. It implements only the socket surface the app uses.

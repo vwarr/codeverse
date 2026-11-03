@@ -1,11 +1,11 @@
-// One interview, run in the browser: the TypeScript port of backend/codeverse/sessions.py.
+// One interview, run in the browser.
 //
 // It talks straight to Gemini Live with a one-use token from /api/session, answers the
 // interviewer's tool calls from browser state (editor code, last test run), measures the latency
 // of every model turn, reconnects with the session-resumption handle when the Live API closes a
 // connection, and asks /api/report for the written report at the end.
 //
-// It exposes the same small event surface the Socket.IO client had (on/off/emit/timeout), so
+// It exposes a small socket-like event surface (on/off/emit/timeout), so
 // InterviewProvider and DemoSocket stay interchangeable.
 //
 // State machine

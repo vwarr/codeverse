@@ -5,5 +5,4 @@
 !.env.example
 backend/.env
 backend/.venv
-backend/audio_files
 backend/tests

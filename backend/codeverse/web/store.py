@@ -140,7 +140,7 @@ class PostgresStore:
         self._dsn = dsn
 
     def _connect(self) -> Any:
-        import psycopg  # imported lazily so tests and the legacy server don't need it
+        import psycopg  # imported lazily so the tests don't need it
 
         if not self._dsn:
             raise RuntimeError("DATABASE_URL is not set")
