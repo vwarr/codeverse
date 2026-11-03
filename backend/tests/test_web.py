@@ -19,7 +19,7 @@ from codeverse.interview.feedback import StaticFeedbackGenerator
 from codeverse.interview.prompts import PROMPT_VERSION
 from codeverse.problems.bank import get_bank
 from codeverse.web import service
-from codeverse.web.handler import JsonHandler, dispatch
+from codeverse.web.handler import JsonHandler, client_ip, dispatch
 from codeverse.web.service import Deps, Request
 from codeverse.web.store import MemoryStore
 
@@ -604,3 +604,25 @@ def test_postgres_store_sql_uses_client_id() -> None:
             "overallScore": 4,
         }
     ]
+
+
+# ---- client IP (per-IP session limit) ----
+
+
+def test_client_ip_prefers_the_vercel_header_over_x_forwarded_for() -> None:
+    # Behind varunwarrier.com's rewrite, x-forwarded-for may hold the proxy, not the visitor.
+    headers = {
+        "x-vercel-forwarded-for": "203.0.113.7",
+        "x-real-ip": "198.51.100.2",
+        "x-forwarded-for": "198.51.100.9, 10.0.0.1",
+    }
+    assert client_ip(headers, "127.0.0.1") == "203.0.113.7"
+
+
+def test_client_ip_falls_back_in_order() -> None:
+    both = {"x-real-ip": "198.51.100.2", "x-forwarded-for": "198.51.100.9"}
+    assert client_ip(both, "127.0.0.1") == "198.51.100.2"
+    # Only the first x-forwarded-for entry counts; later ones are proxies.
+    assert client_ip({"x-forwarded-for": " 198.51.100.9 , 10.0.0.1"}, "127.0.0.1") == "198.51.100.9"
+    # Empty headers are skipped, then the socket address is used.
+    assert client_ip({"x-vercel-forwarded-for": " ", "x-real-ip": ""}, "127.0.0.1") == "127.0.0.1"

@@ -20,12 +20,22 @@ MAX_BODY_BYTES = 1_000_000
 Route = Callable[[Request, Deps], Any]
 
 
+# Client-address headers, most trusted first (https://vercel.com/docs/headers/request-headers).
+# Vercel's edge sets all three to the visitor's public IP. The docs say it overwrites a client's
+# x-forwarded-for; they call the other two "identical" but do not state the overwrite for them.
+# x-vercel-forwarded-for comes first: the docs say x-forwarded-for "could be overwritten if you're
+# using a proxy on top of Vercel", and varunwarrier.com/codeverse reaches this project through a
+# rewrite on another Vercel project. x-forwarded-for is last and only its first entry is used; it is
+# the one header a non-Vercel host (local `vercel dev`, a plain proxy) may pass through from clients.
+_IP_HEADERS = ("x-vercel-forwarded-for", "x-real-ip", "x-forwarded-for")
+
+
 def client_ip(headers: Any, fallback: str) -> str:
-    # Vercel sets x-forwarded-for to the real client address (it overwrites any client value).
-    forwarded = headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return headers.get("x-real-ip") or fallback
+    for name in _IP_HEADERS:
+        value = (headers.get(name) or "").split(",")[0].strip()
+        if value:
+            return value
+    return fallback
 
 
 def dispatch(route: Route | None, request: Request, deps: Deps) -> tuple[int, Any]:

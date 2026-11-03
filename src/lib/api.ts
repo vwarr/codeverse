@@ -1,4 +1,5 @@
-// The app's own API: Vercel functions under /api on the same origin (see api/ at the repo root).
+// The app's own API: Vercel functions on the same origin (see api/ at the repo root). The app is served
+// under Vite's base (/codeverse/), and vercel.json rewrites /codeverse/api/* to the functions.
 
 import { clientId } from './clientId';
 import { DEMO_PROBLEMS, DEMO_TRACKS } from './demo/demoSocket';
@@ -17,6 +18,11 @@ import type {
   Track,
   TrackId,
 } from './types';
+
+/** The URL of an API route, e.g. apiUrl('session') is /codeverse/api/session. */
+export function apiUrl(route: string): string {
+  return `${import.meta.env.BASE_URL}api/${route}`;
+}
 
 async function getJson<T>(path: string, headers?: Record<string, string>): Promise<T> {
   const res = await fetch(path, headers ? { headers } : undefined);
@@ -51,7 +57,7 @@ export function fetchTracks(): Promise<Track[]> {
   if (DEMO) {
     return Promise.resolve(DEMO_TRACKS);
   }
-  return getJson<Track[]>('/api/tracks');
+  return getJson<Track[]>(apiUrl('tracks'));
 }
 
 export function fetchProblems(track?: TrackId, difficulty?: Difficulty): Promise<Problem[]> {
@@ -70,7 +76,7 @@ export function fetchProblems(track?: TrackId, difficulty?: Difficulty): Promise
     params.set('difficulty', difficulty);
   }
   const qs = params.toString();
-  return getJson<Problem[]>(`/api/problems${qs ? `?${qs}` : ''}`);
+  return getJson<Problem[]>(`${apiUrl('problems')}${qs ? `?${qs}` : ''}`);
 }
 
 export function fetchProblem(id: string): Promise<Problem> {
@@ -78,7 +84,7 @@ export function fetchProblem(id: string): Promise<Problem> {
   if (demo) {
     return Promise.resolve(demo);
   }
-  return getJson<Problem>(`/api/problems?id=${encodeURIComponent(id)}`);
+  return getJson<Problem>(`${apiUrl('problems')}?id=${encodeURIComponent(id)}`);
 }
 
 /** A saved report (the History page links here). */
@@ -87,7 +93,7 @@ export function fetchReport(sessionId: string): Promise<ReportRecord> {
     const record = demoReport(sessionId);
     return record ? Promise.resolve(record) : Promise.reject(new Error('report not found'));
   }
-  return getJson<ReportRecord>(`/api/report?sessionId=${encodeURIComponent(sessionId)}`);
+  return getJson<ReportRecord>(`${apiUrl('report')}?sessionId=${encodeURIComponent(sessionId)}`);
 }
 
 /** Saved reports for this browser (its client ID; there are no accounts), newest first. */
@@ -95,7 +101,7 @@ export async function fetchHistory(): Promise<HistoryItem[]> {
   if (DEMO) {
     return demoHistory(DEMO_PROBLEMS);
   }
-  const data = await getJson<{ ok: boolean; reports: HistoryItem[] }>('/api/history', {
+  const data = await getJson<{ ok: boolean; reports: HistoryItem[] }>(apiUrl('history'), {
     'X-Client-Id': clientId(),
   });
   return data.reports;
@@ -109,7 +115,8 @@ export interface InterviewApi {
 }
 
 export const httpApi: InterviewApi = {
-  createSession: (req) => postJson<SessionGrant>('/api/session', { ...req, clientId: clientId() }),
-  runTests: (sessionId, code) => postJson<RunResponse>('/api/run_tests', { sessionId, code }),
-  createReport: (req) => postJson<ReportResponse>('/api/report', req),
+  createSession: (req) =>
+    postJson<SessionGrant>(apiUrl('session'), { ...req, clientId: clientId() }),
+  runTests: (sessionId, code) => postJson<RunResponse>(apiUrl('run_tests'), { sessionId, code }),
+  createReport: (req) => postJson<ReportResponse>(apiUrl('report'), req),
 };

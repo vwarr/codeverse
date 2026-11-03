@@ -1,16 +1,32 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
+  "outputDirectory": "dist",
   "functions": {
     "api/**/*.py": {
       "includeFiles": "backend/codeverse/**",
       "excludeFiles": "{node_modules/**,.yarn/**,src/**,dist/**,design/**,test-utils/**,public/**,backend/tests/**,backend/.venv/**,backend/*.log,**/__pycache__/**,**/.pytest_cache/**,**/.ruff_cache/**,*.lock,package-lock.json}"
     }
   },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/codeverse/",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "source": "/codeverse/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/codeverse",
+      "destination": "/codeverse/index.html"
+    },
+    {
+      "source": "/codeverse/((?!api/).*)",
+      "destination": "/codeverse/index.html"
     }
   ]
 }

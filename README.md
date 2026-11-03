@@ -12,7 +12,7 @@ Browser (React + Monaco)                                Gemini
 │ LiveInterview: state machine,     │
 │   transcript, latency, tools      │
 └──────┬────────────────────────────┘
-       │ fetch /api/*
+       │ fetch /codeverse/api/*
 ┌──────▼────────────────────────────┐
 │ Vercel functions (Python, api/)   │
 │  session    mint a one-use token  ├──────────────►  auth_tokens (model, prompt, tools locked)
@@ -35,6 +35,8 @@ Browser (React + Monaco)                                Gemini
 - The functions reuse the Python modules in `backend/codeverse` (prompts, tracks, problems, feedback, execution). The new code is in `backend/codeverse/web/`.
 
 ## User interface
+
+The app is served under `/codeverse/` (it lives at https://varunwarrier.com/codeverse, which rewrites `/codeverse/*` to this project). The page paths below are relative to that prefix, so the History page is `/codeverse/history`. The browser calls the functions at `/codeverse/api/*`; this README names them by their function path (`/api/*`).
 
 All problems are in Python. There is no language picker.
 
@@ -65,7 +67,8 @@ All problems are in Python. There is no language picker.
 
 - **Run tests** shows real results from the hidden suites. For the software-engineering track, these results are for the starter code only (`src/lib/demo/sweRuns.json`). For the debugging track, they are for the starter code and the fixed code (`src/lib/demo/debugRuns.json`).
 - The demo saves reports in `localStorage`, so the History page shows them.
-- To see one interview state, add `?demoState=` before the `#`. The values are `reconnecting`, `mic_denied` and `interviewer_wrap_up`. Example: `http://localhost:5173/?demoState=reconnecting#/`.
+- To see one interview state, add `?demoState=` before the `#`. The values are `reconnecting`, `mic_denied` and `interviewer_wrap_up`. Example: `http://localhost:5173/codeverse/?demoState=reconnecting#/`.
+- Demo mode is for local UI work and screenshots only. A Vercel build with `VITE_DEMO` set fails (see `vite.config.mjs`), so production never ships it.
 - To make `sweRuns.json` again after a change to the bank, run each problem's starter code with `job_for` and `LocalRunner` (see `backend/tests/test_jobs.py`).
 
 ## Run it locally
@@ -75,7 +78,7 @@ You need Node 22, Python 3.14, [uv](https://docs.astral.sh/uv/) and the [Vercel 
 1. Install the frontend packages: `npm install`.
 2. Put the Gemini API key in `backend/.env` as `GEMINI_API_KEY=…`. The functions read this file. (The Vercel copy of the key is sensitive, so `vercel env pull` cannot download it.)
 3. Get the Neon variables and the OIDC token for Vercel Sandbox: `vercel env pull .env.local`. The OIDC token expires after about 12 hours. Run the command again when **Run tests** fails with a credentials error.
-4. Start the app: `vercel dev`. Open the URL that it shows (http://localhost:3000).
+4. Start the app: `vercel dev`. Open the URL that it shows (http://localhost:3000); `/` redirects to `/codeverse/`.
 5. Allow the microphone, select a track and press **Start interview**.
 
 `vercel dev` runs Vite and the Python functions together. It installs the packages in `requirements.txt` for the version in `.python-version`, but it runs your local `python3`. These two versions must be the same.
@@ -104,14 +107,16 @@ A push to the GitHub repository deploys to Vercel (Hobby tier is sufficient).
 `vercel.json` does these things:
 
 - It adds `backend/codeverse/**` to each function bundle. It keeps the hidden test files (`problems/debug/*/test_*.py`) in the bundle.
-- It rewrites every path except `/api/*` to `/index.html`, so the SPA routes work and the functions stay reachable.
+- Vite builds into `dist/codeverse/` (`base: '/codeverse/'`), and `outputDirectory` is `dist`, so the assets exist at `/codeverse/assets/...`. Vercel serves files before it applies rewrites, so the assets need no rule.
+- It rewrites `/codeverse/api/*` to the functions at `/api/*`, and every other path under `/codeverse/` to `/codeverse/index.html`, so the SPA routes work. It redirects `/` to `/codeverse/`.
+- varunwarrier.com (a separate Vercel project) rewrites `/codeverse` and `/codeverse/*` to this project's production URL.
 
 Do not add `fastapi` or `flask` to `requirements.txt`. If you do, Vercel detects a Python framework and sends every request to it, not to the Vite app.
 
 Guardrails for a public URL:
 
 - `MAX_SESSION_MINUTES`: the browser starts the wrap-up at this time. The token expires `SESSION_GRACE_MINUTES` later, and then Gemini rejects all messages.
-- `MAX_SESSIONS_PER_IP`: the number of interviews for one address whose token has not expired. A token cannot be revoked, so an interview counts until its token expires (`MAX_SESSION_MINUTES` + `SESSION_GRACE_MINUTES`), also after it ends. A reloaded tab also uses a slot.
+- `MAX_SESSIONS_PER_IP`: the number of interviews for one address whose token has not expired. The address comes from `x-vercel-forwarded-for`, then `x-real-ip`, then `x-forwarded-for` (`client_ip` in `backend/codeverse/web/handler.py`). Vercel sets these. Its docs do not say what a Vercel deployment sees when another Vercel project (varunwarrier.com) rewrites to it; check `interview_sessions.ip` after a deploy. A token cannot be revoked, so an interview counts until its token expires (`MAX_SESSION_MINUTES` + `SESSION_GRACE_MINUTES`), also after it ends. A reloaded tab also uses a slot.
 - Set a spend cap on the Gemini key. Live audio is billed per token.
 - Vercel Sandbox on Hobby: 5,000 sandbox creations, 5 hours of active CPU and 10 concurrent sandboxes each month. Each **Run tests** press and each final grading uses one sandbox. When the quota is used, Vercel pauses sandbox creation, and **Run tests** fails until the next cycle. Lower `MAX_RUNS_PER_SESSION` to make the quota last longer.
 
