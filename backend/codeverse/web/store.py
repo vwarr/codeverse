@@ -30,7 +30,11 @@ class SessionRow:
 
 class Store(Protocol):
     def active_sessions_for_ip(self, ip: str, now: dt.datetime) -> int:
-        """Sessions whose token has not expired. A token cannot be revoked, so ending does not count."""
+        """Sessions that have not ended and whose token has not expired.
+
+        An ended session frees its slot. Its Live token stays valid until `expire_time` (it cannot
+        be revoked), but the browser closes the Live connection before it asks for the report.
+        A session abandoned without a report keeps its slot until it expires."""
 
     def create_session(self, row: SessionRow) -> None: ...
     def get_session(self, session_id: str) -> SessionRow | None: ...
@@ -53,7 +57,9 @@ class MemoryStore:
         self.reports: dict[str, dict[str, Any]] = {}
 
     def active_sessions_for_ip(self, ip: str, now: dt.datetime) -> int:
-        return sum(1 for s in self.sessions.values() if s.ip == ip and s.expires_at > now)
+        return sum(
+            1 for s in self.sessions.values() if s.ip == ip and s.ended_at is None and s.expires_at > now
+        )
 
     def create_session(self, row: SessionRow) -> None:
         self.sessions[row.id] = row
@@ -154,7 +160,7 @@ class PostgresStore:
     def active_sessions_for_ip(self, ip: str, now: dt.datetime) -> int:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT count(*) FROM interview_sessions WHERE ip = %s AND expires_at > %s",
+                "SELECT count(*) FROM interview_sessions WHERE ip = %s AND ended_at IS NULL AND expires_at > %s",
                 (ip, now),
             ).fetchone()
         return int(row[0])

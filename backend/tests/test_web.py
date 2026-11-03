@@ -186,6 +186,35 @@ def test_token_config_is_valid_for_the_sdk_and_locks_fields() -> None:
     assert any(f.startswith("systemInstruction") for f in mask), mask
 
 
+def test_report_frees_the_per_ip_slot_even_when_it_fails() -> None:
+    deps, store, *_ = make_deps(max_sessions_per_ip=1)
+    sid = start(deps)["session"]["sessionId"]
+    assert call(service.create_session, deps, body={"track": "debug"})[0] == 429
+    status, _ = call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})
+    assert status == 200 and store.sessions[sid].ended_at is not None
+    # A connection lost mid-interview whose report then fails still ends the session.
+    sid = start(deps)["session"]["sessionId"]
+    deps.feedback = lambda: Flaky(5, RuntimeError("model down"))
+    body = {"sessionId": sid, "transcript": TRANSCRIPT, "endReason": "connection_lost"}
+    assert call(service.create_report, deps, body=body)[0] == 502
+    assert store.sessions[sid].ended_at is not None
+    start(deps)
+
+
+def test_memory_store_counts_only_unended_unexpired_sessions() -> None:
+    from codeverse.web.store import SessionRow
+
+    store = MemoryStore()
+    later = T0 + dt.timedelta(minutes=10)
+    store.create_session(SessionRow("a", "1.1.1.1", "swe", "p", "python", T0, later))
+    store.create_session(SessionRow("b", "1.1.1.1", "swe", "p", "python", T0, later))
+    store.create_session(SessionRow("c", "1.1.1.1", "swe", "p", "python", T0, T0))  # expired
+    store.create_session(SessionRow("d", "9.9.9.9", "swe", "p", "python", T0, later))
+    assert store.active_sessions_for_ip("1.1.1.1", T0) == 2
+    store.end_session("a", T0)
+    assert store.active_sessions_for_ip("1.1.1.1", T0) == 1
+
+
 def test_per_ip_limit_counts_active_sessions_only() -> None:
     deps, store, _, _, clock = make_deps(max_sessions_per_ip=2, max_session_minutes=10)
     first = start(deps, track="swe")
@@ -194,8 +223,9 @@ def test_per_ip_limit_counts_active_sessions_only() -> None:
     assert status == 429 and "Too many" in data["error"]
     # Another address is not affected.
     start(deps, track="swe", ip="5.6.7.8")
-    # Ending a session does not free its slot: its token stays usable until it expires.
+    # Ending a session (the report flow does) frees its slot; the active one still counts.
     store.end_session(first["session"]["sessionId"], clock())
+    start(deps, track="swe")
     assert call(service.create_session, deps, body={"track": "swe"})[0] == 429
     # Expired sessions do not count.
     clock.now = T0 + dt.timedelta(minutes=30)
@@ -586,12 +616,19 @@ def test_postgres_store_sql_uses_client_id() -> None:
         def fetchall(self) -> list[tuple]:
             return [("s1", "debug", "cart", "2026-11-03T12:00:00+00:00", 4)]
 
+        def fetchone(self) -> tuple:
+            return (1,)
+
     conn = Conn()
     store = PostgresStore("postgres://x")
     store._connect = lambda: conn  # type: ignore[method-assign]
     store.create_session(SessionRow("s1", "1.1.1.1", "debug", "cart", "python", T0, T0, client_id=CLIENT_A))
     sql, params = conn.calls[-1]
     assert sql.count("%s") == len(params) == 10 and params[-1] == CLIENT_A
+    assert store.active_sessions_for_ip("1.1.1.1", T0) == 1
+    sql, params = conn.calls[-1]
+    assert "ip = %s" in sql and "ended_at IS NULL" in sql and "expires_at > %s" in sql
+    assert params == ("1.1.1.1", T0)
     rows = store.list_reports(CLIENT_A, 5)
     sql, params = conn.calls[-1]
     assert "s.client_id = %s" in sql and "ip" not in sql and params == (CLIENT_A, 5)
