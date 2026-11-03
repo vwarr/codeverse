@@ -307,6 +307,15 @@ async def create_report(req: Request, deps: Deps) -> dict[str, Any]:
     "failed" and the error, and a later POST for the same session tries again.
     """
     row = _session(deps, req.body)
+    try:
+        return await _create_report(row, req, deps)
+    finally:
+        # The interview is over either way, even when the request is rejected: no more test runs,
+        # and the per-IP slot is free.
+        deps.store.end_session(row.id, deps.now())
+
+
+async def _create_report(row: SessionRow, req: Request, deps: Deps) -> dict[str, Any]:
     existing = deps.store.get_report(row.id)
     if existing is not None and existing.get("status", "complete") == "complete":
         # A retry must not bill the text model twice.
@@ -338,46 +347,53 @@ async def create_report(req: Request, deps: Deps) -> dict[str, Any]:
         "report": None,
         "error": None,
     }
-    try:
-        deps.store.save_report(row.id, record)
+    deps.store.save_report(row.id, record)
 
-        test_summary: str | None = None
-        job = job_for(problem, code, time_limit=deps.settings.code_run_timeout_seconds)
-        if track.grade_final_run and deps.runner is not None and job is not None:
-            # Grade the code as it was left, whether or not the candidate ran it last.
-            try:
-                result = await _run(deps, job)
-                record["finalRun"] = result.public()
-                test_summary = result.summary(max_failures=12)
-            except Exception:  # noqa: BLE001
-                log.exception("session %s: final test run failed", row.id)
-
+    test_summary: str | None = None
+    job = job_for(problem, code, time_limit=deps.settings.code_run_timeout_seconds)
+    if track.grade_final_run and deps.runner is not None and job is not None:
+        # Grade the code as it was left, whether or not the candidate ran it last.
         try:
-            report = await _generate_with_retry(
-                deps,
-                track_id=track.id,
-                problem_text=problem.prompt_text(),
-                transcript=transcript,
-                code=code if track.surface == "editor" else None,
-                test_summary=test_summary,
-            )
-        except Exception as exc:  # noqa: BLE001
-            log.exception("session %s: feedback generation failed", row.id)
-            busy = is_rate_limited(exc)
-            record.update(status="failed", error=f"{'rate limited: ' if busy else ''}{exc}"[:1000])
-            deps.store.save_report(row.id, record)
-            reason = "the report model is over its rate limit" if busy else "the report model failed"
-            raise ApiError(
-                503 if busy else 502,
-                f"Could not write the feedback report ({reason}). Your transcript is saved; try again later.",
-            ) from exc
+            result = await _run(deps, job)
+            record["finalRun"] = result.public()
+            test_summary = result.summary(max_failures=12)
+        except Exception:  # noqa: BLE001
+            log.exception("session %s: final test run failed", row.id)
 
-        record.update(status="complete", report=report.model_dump())
+    try:
+        report = await _generate_with_retry(
+            deps,
+            track_id=track.id,
+            problem_text=problem.prompt_text(),
+            transcript=transcript,
+            code=code if track.surface == "editor" else None,
+            test_summary=test_summary,
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.exception("session %s: feedback generation failed", row.id)
+        busy = is_rate_limited(exc)
+        record.update(status="failed", error=f"{'rate limited: ' if busy else ''}{exc}"[:1000])
         deps.store.save_report(row.id, record)
-        return {"ok": True, "report": record["report"], "finalRun": record["finalRun"]}
-    finally:
-        # The interview is over either way: no more test runs.
-        deps.store.end_session(row.id, deps.now())
+        reason = "the report model is over its rate limit" if busy else "the report model failed"
+        raise ApiError(
+            503 if busy else 502,
+            f"Could not write the feedback report ({reason}). Your transcript is saved; try again later.",
+        ) from exc
+
+    record.update(status="complete", report=report.model_dump())
+    deps.store.save_report(row.id, record)
+    return {"ok": True, "report": record["report"], "finalRun": record["finalRun"]}
+
+
+def end_session(req: Request, deps: Deps) -> dict[str, Any]:
+    """POST /api/end: the browser gave up on the interview without asking for a report.
+
+    Called when the Live connection fails before the interview starts, and by `sendBeacon` when
+    the tab closes. Ends the session so it frees its per-IP slot. Idempotent.
+    """
+    row = _session(deps, req.body)
+    deps.store.end_session(row.id, deps.now())
+    return {"ok": True}
 
 
 def get_report(req: Request, deps: Deps) -> dict[str, Any]:

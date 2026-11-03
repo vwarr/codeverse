@@ -86,6 +86,7 @@ function setup() {
       result: run,
       summary: '1 of 2 tests passed.',
     })),
+    endSession: vi.fn(),
     createReport: vi.fn(async (req: ReportRequest) => {
       reports.push(req);
       return {
@@ -332,11 +333,43 @@ describe('LiveInterview', () => {
     expect(events.find(([e]) => e === 'error')?.[1].message).toContain('boom');
   });
 
+  it('ends the session on the server when it fails, since no report will follow', async () => {
+    const { live, api, conns, events } = setup();
+    await live.start({ track: 'debug' });
+    conns[0].cb.onClose('boom');
+    await vi.waitFor(() => expect(events.some(([e]) => e === 'error')).toBe(true));
+    expect(api.endSession).toHaveBeenCalledTimes(1);
+    expect(api.endSession).toHaveBeenCalledWith('s1');
+    expect(api.createReport).not.toHaveBeenCalled();
+    // Closing the tab afterwards sends nothing more.
+    window.dispatchEvent(new Event('pagehide'));
+    expect(api.endSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends an end beacon if the tab closes during the interview', async () => {
+    const { live, api } = setup();
+    await live.start({ track: 'debug' });
+    window.dispatchEvent(new Event('pagehide'));
+    expect(api.endSession).toHaveBeenCalledWith('s1', { beacon: true });
+  });
+
+  it('sends no end beacon once the report is requested', async () => {
+    const { live, api, conns, events } = setup();
+    await live.start({ track: 'debug' });
+    live.emit('end_interview', {});
+    conns[0].msg({ serverContent: { turnComplete: true } });
+    await vi.waitFor(() => expect(events.some(([e]) => e === 'interview_ended')).toBe(true));
+    expect(api.createReport).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(api.endSession).not.toHaveBeenCalled();
+  });
+
   it('fails cleanly when the first connection is refused', async () => {
     const api = {
       createSession: vi.fn(async () => grant),
       runTests: vi.fn(),
       createReport: vi.fn(),
+      endSession: vi.fn(),
     } as unknown as InterviewApi;
     const live = new LiveInterview({
       api,
@@ -348,6 +381,8 @@ describe('LiveInterview', () => {
     live.on('error', (d: { message: string }) => errors.push(d.message));
     expect((await live.start({ track: 'swe' })).ok).toBe(true);
     expect(errors[0]).toContain('token expired');
+    expect(api.endSession).toHaveBeenCalledWith('s1');
+    expect(api.createReport).not.toHaveBeenCalled();
   });
 
   it('refuses test runs when the track cannot run code', async () => {

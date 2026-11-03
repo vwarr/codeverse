@@ -112,6 +112,25 @@ export interface InterviewApi {
   createSession: (req: StartRequest) => Promise<SessionGrant | { ok: false; error: string }>;
   runTests: (sessionId: string, code: string) => Promise<RunResponse>;
   createReport: (req: ReportRequest) => Promise<ReportResponse>;
+  /** End an interview that will not ask for a report, so it frees its per-IP slot. Best effort. */
+  endSession: (sessionId: string, opts?: { beacon?: boolean }) => void;
+}
+
+/** POST /api/end. With `beacon`, uses navigator.sendBeacon, which survives the page closing. */
+export function endSession(sessionId: string, opts: { beacon?: boolean } = {}): void {
+  const url = apiUrl('end');
+  const body = JSON.stringify({ sessionId });
+  if (opts.beacon && typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+    if (navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))) {
+      return;
+    }
+  }
+  void fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: true,
+  }).catch(() => undefined);
 }
 
 export const httpApi: InterviewApi = {
@@ -119,4 +138,5 @@ export const httpApi: InterviewApi = {
     postJson<SessionGrant>(apiUrl('session'), { ...req, clientId: clientId() }),
   runTests: (sessionId, code) => postJson<RunResponse>(apiUrl('run_tests'), { sessionId, code }),
   createReport: (req) => postJson<ReportResponse>(apiUrl('report'), req),
+  endSession,
 };

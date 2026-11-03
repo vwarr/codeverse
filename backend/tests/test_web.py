@@ -436,10 +436,69 @@ def test_make_runner_never_runs_code_locally_on_a_deployment() -> None:
 
 
 def test_report_rejects_bad_transcript() -> None:
-    deps, *_ = make_deps()
+    deps, store, *_ = make_deps()
     sid = start(deps, track="swe")["session"]["sessionId"]
     bad = {"sessionId": sid, "transcript": [{"role": "system", "text": "x"}]}
     assert call(service.create_report, deps, body=bad)[0] == 400
+    # A rejected report still ends the interview it names.
+    assert store.sessions[sid].ended_at is not None
+
+
+def test_rejected_reports_end_the_session_but_unknown_ids_end_nothing() -> None:
+    deps, store, *_ = make_deps()
+    too_long = start(deps)["session"]["sessionId"]
+    body = {"sessionId": too_long, "code": "x" * (service.MAX_CODE_CHARS + 1)}
+    assert call(service.create_report, deps, body=body)[0] == 413
+    assert store.sessions[too_long].ended_at is not None
+
+    gone = start(deps)["session"]["sessionId"]
+    store.sessions[gone].problem_id = "no-such-problem"
+    assert call(service.create_report, deps, body={"sessionId": gone})[0] == 404
+    assert store.sessions[gone].ended_at is not None
+
+    live = start(deps)["session"]["sessionId"]
+    assert call(service.create_report, deps, body={"sessionId": "nope"})[0] == 404
+    assert call(service.create_report, deps, body={})[0] == 404
+    assert store.sessions[live].ended_at is None
+
+
+def test_end_session_is_idempotent_and_frees_the_slot() -> None:
+    deps, store, _, _, clock = make_deps(max_sessions_per_ip=1)
+    sid = start(deps)["session"]["sessionId"]
+    assert call(service.create_session, deps, body={"track": "debug"})[0] == 429
+    assert call(service.end_session, deps, body={"sessionId": sid}) == (200, {"ok": True})
+    ended_at = store.sessions[sid].ended_at
+    assert ended_at == T0
+    clock.now = T0 + dt.timedelta(minutes=1)
+    assert call(service.end_session, deps, body={"sessionId": sid}) == (200, {"ok": True})
+    assert store.sessions[sid].ended_at == ended_at  # the first end stands
+    assert call(service.end_session, deps, body={"sessionId": "nope"})[0] == 404
+    assert call(service.end_session, deps, body={})[0] == 404
+    start(deps)
+    # Runs are refused after the end; a report can still be written.
+    assert call(service.run_tests, deps, body={"sessionId": sid, "code": "x"})[0] == 409
+    assert call(service.create_report, deps, body={"sessionId": sid, "transcript": TRANSCRIPT})[0] == 200
+
+
+def test_end_endpoint_accepts_a_beacon_body() -> None:
+    """navigator.sendBeacon posts a Blob: JSON with Content-Type application/json or text/plain."""
+    deps, store, *_ = make_deps()
+
+    class Handler(JsonHandler):
+        POST = staticmethod(service.end_session)
+
+    Handler.deps = staticmethod(lambda: deps)  # type: ignore[assignment]
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{httpd.server_port}/api/end"
+        for content_type in ("application/json", "text/plain;charset=UTF-8"):
+            sid = start(deps)["session"]["sessionId"]
+            body = json.dumps({"sessionId": sid}).encode()
+            assert _http(url, body, {"Content-Type": content_type}) == (200, {"ok": True})
+            assert store.sessions[sid].ended_at is not None
+    finally:
+        httpd.shutdown()
 
 
 # ---------------------------------------------------------------------- HTTP adapter

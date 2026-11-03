@@ -128,6 +128,8 @@ export class LiveInterview {
   private outbox: ((c: LiveConnection) => void)[] = [];
   private codeTimer: ReturnType<typeof setTimeout> | null = null;
   private limitTimer: ReturnType<typeof setTimeout> | null = null;
+  // Ends the session with a beacon if the tab closes before a report is requested.
+  private pageHide: (() => void) | null = null;
   private endedResolve: (() => void) | null = null;
   private ended: Promise<void> = Promise.resolve();
 
@@ -255,6 +257,7 @@ export class LiveInterview {
       return grant;
     }
     this.grant = grant;
+    this.watchPageHide(grant.session.sessionId);
     // The UI shows the time remaining, so the session carries the limit.
     this.session = { ...grant.session, maxSeconds: grant.maxSeconds };
     this.language = grant.session.language;
@@ -279,6 +282,7 @@ export class LiveInterview {
   }
 
   private reset() {
+    this.unwatchPageHide();
     this.closeConnection();
     this.closing = false;
     this.grant = null;
@@ -425,6 +429,11 @@ export class LiveInterview {
     }
     this.fire('error', { message });
     this.setState('error');
+    // No report will be asked for: tell the server the interview is over, so it frees its slot.
+    this.unwatchPageHide();
+    if (this.session) {
+      this.api.endSession(this.session.sessionId);
+    }
     this.flushTranscript();
     this.stopTimers();
     this.closeConnection();
@@ -437,6 +446,7 @@ export class LiveInterview {
       return;
     }
     const session = this.session;
+    this.unwatchPageHide(); // the report request ends the session
     this.flushTranscript();
     this.stopTimers();
     this.closeConnection(); // stop paying for audio before the report call
@@ -465,6 +475,23 @@ export class LiveInterview {
       this.fire('error', { message: res.error });
     }
     this.fire('interview_ended', { sessionId: session.sessionId, metrics });
+  }
+
+  private watchPageHide(sessionId: string) {
+    this.unwatchPageHide();
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const handler = () => this.api.endSession(sessionId, { beacon: true });
+    window.addEventListener('pagehide', handler);
+    this.pageHide = handler;
+  }
+
+  private unwatchPageHide() {
+    if (this.pageHide) {
+      window.removeEventListener('pagehide', this.pageHide);
+      this.pageHide = null;
+    }
   }
 
   private stopTimers() {

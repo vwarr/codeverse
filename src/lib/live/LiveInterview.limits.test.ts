@@ -47,6 +47,7 @@ function setup(reportResults: Awaited<ReturnType<InterviewApi['createReport']>>[
   const api: InterviewApi = {
     createSession: vi.fn(async () => grant),
     runTests: vi.fn(),
+    endSession: vi.fn(),
     createReport: vi.fn(async (req: ReportRequest) => {
       reports.push(req);
       return (

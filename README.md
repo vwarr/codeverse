@@ -154,7 +154,7 @@ All settings are environment variables (see `backend/.env.example`). Model IDs a
 ## Layout
 
 ```
-api/                      Vercel functions: tracks · problems · session · run_tests · report · history
+api/                      Vercel functions: tracks · problems · session · run_tests · report · end · history
 backend/codeverse/
   web/          service.py (routes) · handler.py (HTTP) · store.py (Neon)
   interview/    tracks.py · prompts.py · tools.py · feedback.py
