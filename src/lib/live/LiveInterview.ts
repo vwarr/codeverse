@@ -40,6 +40,10 @@ const MAX_RECONNECTS = 20;
 const FINISH_WAIT_MS = 30_000;
 const LIVE_STATES: SessionStatus[] = ['listening', 'thinking', 'speaking'];
 const REPORT_RETRY_MS = 3000;
+const TIME_NOTE_EVERY_S = 300;
+const TIME_NOTE_LEFT_S = [600, 300, 120];
+// A scheduled time note is skipped if a code snapshot carried the time this recently.
+const TIME_NOTE_SKIP_S = 60;
 const RATE_LIMITED_MESSAGE =
   'The interviewer is over its usage limit (rate limit or quota). Try again in a few minutes.';
 
@@ -55,6 +59,35 @@ interface TurnMetrics {
   candidateDoneAt: number | null; // seconds, from the clock
   firstAudioAt: number;
   audioBytes: number;
+}
+
+/** Whole minutes for a time note: elapsed is rounded, so a timer that fires a little early still
+ * reads 35 at 34:59.9, and left is the rest of the total. */
+export function timeMinutes(elapsedSeconds: number, totalSeconds: number) {
+  const total = Math.round(totalSeconds / 60);
+  const elapsed = Math.min(total, Math.max(0, Math.round(elapsedSeconds / 60)));
+  return { elapsed, total, left: total - elapsed };
+}
+
+/** The hidden time note, e.g. "[Time: 17 of 45 min elapsed, 28 left]". */
+export function timeNote(elapsedSeconds: number, totalSeconds: number): string {
+  const { elapsed, total, left } = timeMinutes(elapsedSeconds, totalSeconds);
+  return `[Time: ${elapsed} of ${total} min elapsed, ${left} left]`;
+}
+
+/** When to send a standalone time note (seconds from the start): every 5 minutes, and when 10, 5
+ * and 2 minutes are left. Sorted, without duplicates, all before the limit. */
+export function timeNoteSchedule(totalSeconds: number): number[] {
+  const at = new Set<number>();
+  for (let t = TIME_NOTE_EVERY_S; t < totalSeconds; t += TIME_NOTE_EVERY_S) {
+    at.add(t);
+  }
+  for (const left of TIME_NOTE_LEFT_S) {
+    if (totalSeconds - left > 0) {
+      at.add(totalSeconds - left);
+    }
+  }
+  return [...at].sort((a, b) => a - b);
 }
 
 export function latencyMs(turn: TurnMetrics): number | null {
@@ -127,6 +160,8 @@ export class LiveInterview {
   private outbox: ((c: LiveConnection) => void)[] = [];
   private codeTimer: ReturnType<typeof setTimeout> | null = null;
   private limitTimer: ReturnType<typeof setTimeout> | null = null;
+  private timeNoteTimers: ReturnType<typeof setTimeout>[] = [];
+  private lastTimeNoteAt: number | null = null; // seconds, from the clock
   // Ends the session with a beacon if the tab closes before a report is requested.
   private pageHide: (() => void) | null = null;
   private endedResolve: (() => void) | null = null;
@@ -275,6 +310,9 @@ export class LiveInterview {
       return { ok: true, session: this.session };
     }
     this.limitTimer = setTimeout(() => this.beginWrapUp('time_limit'), grant.maxSeconds * 1000);
+    this.timeNoteTimers = timeNoteSchedule(grant.maxSeconds).map((at) =>
+      setTimeout(() => this.sendTimeNote(), at * 1000)
+    );
     this.setState('thinking');
     this.transcript.openingSent();
     this.sendText(grant.openingInstruction, true);
@@ -298,6 +336,7 @@ export class LiveInterview {
     this.audioOutBytes = 0;
     this.toolCalls = 0;
     this.wrapUpStarted = false;
+    this.lastTimeNoteAt = null;
     this.runCount = 0;
     this.running = false;
     this.lastRun = null;
@@ -338,10 +377,9 @@ export class LiveInterview {
         return;
       }
       const snapshot = this.code.trim() || '(empty editor)';
-      this.sendText(
-        `[Candidate's current ${this.language} code — for your reference, do not respond to this]\n${snapshot}`,
-        false
-      );
+      const note = this.wrapUpStarted ? '' : `${this.takeTimeNote()}\n`;
+      const header = `[Candidate's current ${this.language} code — for your reference, do not respond to this]`;
+      this.sendText(`${note}${header}\n${snapshot}`, false);
     }, this.grant.codeDebounceSeconds * 1000);
   }
 
@@ -393,6 +431,7 @@ export class LiveInterview {
     if (this.codeTimer) {
       clearTimeout(this.codeTimer);
     }
+    this.clearTimeNotes();
     this.setState('wrapping_up', { reason });
     // When the model asked (via the tool), the instruction goes back in the tool result and the
     // model continues its turn; another user turn would make it close twice.
@@ -502,6 +541,32 @@ export class LiveInterview {
     }
     this.codeTimer = null;
     this.limitTimer = null;
+    this.clearTimeNotes();
+  }
+
+  private clearTimeNotes() {
+    this.timeNoteTimers.forEach(clearTimeout);
+    this.timeNoteTimers = [];
+  }
+
+  // ------------------------------------------------------------------ time notes
+  // Hidden text, like the code snapshots: the Live API does not transcribe text input, so the
+  // notes never reach the transcript, and they do not touch the latency measurement.
+
+  /** The time note for now, remembered so that a scheduled note soon after is skipped. */
+  private takeTimeNote(): string {
+    this.lastTimeNoteAt = this.clock();
+    return timeNote(this.now(), this.grant?.maxSeconds ?? 0);
+  }
+
+  private sendTimeNote() {
+    if (this.wrapUpStarted || !this.grant || !this.isLive()) {
+      return;
+    }
+    if (this.lastTimeNoteAt != null && this.clock() - this.lastTimeNoteAt < TIME_NOTE_SKIP_S) {
+      return;
+    }
+    this.sendText(this.takeTimeNote(), false);
   }
 
   // ------------------------------------------------------------------ Live connection

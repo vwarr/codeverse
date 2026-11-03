@@ -1,7 +1,13 @@
 import type { InterviewApi } from '../api';
 import type { ReportRequest, SessionGrant, SessionInfo, TestRun } from '../types';
 import type { LiveCallbacks, LiveConnection, LiveConnectOptions, LiveMessage } from './connector';
-import { arrayBufferToBase64, base64ToArrayBuffer, LiveInterview } from './LiveInterview';
+import {
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+  LiveInterview,
+  timeNote,
+  timeNoteSchedule,
+} from './LiveInterview';
 
 const session: SessionInfo = {
   sessionId: 's1',
@@ -648,5 +654,97 @@ describe('LiveInterview transcript order', () => {
     // The UI ends with the same final transcript.
     const last = events.filter(([e]) => e === 'transcript').at(-1)![1].turns;
     expect(last).toEqual(reports[0].transcript);
+  });
+});
+
+describe('time notes', () => {
+  it('formats whole minutes, rounding the elapsed time', () => {
+    expect(timeNote(17 * 60, 45 * 60)).toBe('[Time: 17 of 45 min elapsed, 28 left]');
+    expect(timeNote(0, 45 * 60)).toBe('[Time: 0 of 45 min elapsed, 45 left]');
+    expect(timeNote(35 * 60 - 0.1, 45 * 60)).toBe('[Time: 35 of 45 min elapsed, 10 left]');
+    expect(timeNote(17 * 60 + 29, 45 * 60)).toBe('[Time: 17 of 45 min elapsed, 28 left]');
+    expect(timeNote(17 * 60 + 31, 45 * 60)).toBe('[Time: 18 of 45 min elapsed, 27 left]');
+    expect(timeNote(50 * 60, 45 * 60)).toBe('[Time: 45 of 45 min elapsed, 0 left]');
+  });
+
+  it('schedules every 5 minutes and at 10, 5 and 2 minutes left, once each', () => {
+    const min = (xs: number[]) => xs.map((x) => x / 60);
+    expect(min(timeNoteSchedule(45 * 60))).toEqual([5, 10, 15, 20, 25, 30, 35, 40, 43]);
+    expect(min(timeNoteSchedule(12 * 60))).toEqual([2, 5, 7, 10]);
+    expect(min(timeNoteSchedule(10 * 60))).toEqual([5, 8]);
+  });
+
+  // Advance the injected clock and the fake timers together.
+  async function timed() {
+    vi.useFakeTimers();
+    const ctx = setup();
+    await ctx.live.start({ track: 'debug' });
+    const c = ctx.conns[0];
+    // In steps of 0.5 s, so a timer sees the clock at the time it fires.
+    const wait = (s: number) => {
+      for (let i = 0; i < s * 2; i++) {
+        ctx.tick(0.5);
+        vi.advanceTimersByTime(500);
+      }
+    };
+    const notes = () => c.texts.filter((t) => t.text.includes('[Time: ')).map((t) => t.text);
+    return { ...ctx, c, wait, notes };
+  }
+
+  it('sends each scheduled note once, as hidden context', async () => {
+    const { c, wait, notes } = await timed();
+    wait(9 * 60);
+    expect(notes()).toEqual([
+      '[Time: 5 of 10 min elapsed, 5 left]',
+      '[Time: 8 of 10 min elapsed, 2 left]',
+    ]);
+    expect(c.texts.filter((t) => t.text.startsWith('[Time: ')).every((t) => !t.turnComplete)).toBe(
+      true
+    );
+  });
+
+  it('puts the time on the first line of each code snapshot and skips a note within 60 s', async () => {
+    const { live, c, wait, notes } = await timed();
+    wait(4 * 60 + 30);
+    live.emit('code_update', { code: 'x = 1' });
+    wait(1); // the snapshot debounce
+    const snap = c.texts.at(-1)!.text.split('\n');
+    expect(snap[0]).toBe('[Time: 5 of 10 min elapsed, 5 left]');
+    expect(snap[1]).toMatch(/^\[Candidate's current python code/);
+    wait(29); // the 5-minute note falls 29 s after the snapshot: skipped
+    expect(notes()).toHaveLength(1);
+    wait(3 * 60); // the 2-minutes-left note is sent
+    expect(notes()).toEqual([snap.join('\n'), '[Time: 8 of 10 min elapsed, 2 left]']);
+  });
+
+  it('sends no notes after wrap-up has started', async () => {
+    const { live, c, wait, notes } = await timed();
+    live.emit('end_interview', {});
+    live.emit('code_update', { code: 'x = 2' });
+    wait(9 * 60);
+    expect(notes()).toEqual([]);
+    expect(c.texts.at(-1)!.text).toMatch(/^\[Candidate's current python code/);
+  });
+
+  it('keeps the notes out of the transcript and the latency', async () => {
+    const { live, c, wait, reports, events } = await timed();
+    c.msg(audio(480));
+    c.msg({ serverContent: { outputTranscription: { text: 'Hi.' } } });
+    c.msg({ serverContent: { turnComplete: true } });
+    c.msg({ serverContent: { inputTranscription: { text: 'Hello.' } } });
+    wait(0.5);
+    c.msg(audio(480));
+    c.msg({ serverContent: { outputTranscription: { text: 'Go ahead.' } } });
+    c.msg({ serverContent: { turnComplete: true } });
+    live.emit('code_update', { code: 'y = 3' });
+    wait(5 * 60);
+    expect(c.texts.filter((t) => t.text.includes('[Time: '))).toHaveLength(2); // the snapshot's and the 5-minute note;
+    expect(live.metrics().response_latency_ms_p50).toBe(500);
+    live.emit('end_interview', {});
+    c.msg({ serverContent: { turnComplete: true } });
+    await vi.waitFor(() => expect(reports).toHaveLength(1));
+    const all = JSON.stringify([reports[0].transcript, events.filter(([e]) => e === 'transcript')]);
+    expect(all).not.toContain('[Time:');
+    expect(reports[0].transcript.map((t) => t.text)).toEqual(['Hi.', 'Hello.', 'Go ahead.']);
   });
 });
